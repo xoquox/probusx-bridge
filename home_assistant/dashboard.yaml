@@ -1,0 +1,11 @@
+# Ressource zuerst hinzufügen: /local/probusx/probusx-panel.js?v=4 (JavaScript-Modul).
+# Tatsächliche Entity-IDs unter Einstellungen > Geräte > ProBusX prüfen.
+# Eine breite Dashboard-Spalte oder eine Panel-Ansicht verwenden.
+type: custom:probusx-panel
+title: Heizungsregler
+camera: camera.probusx_display
+up: button.probusx_hoch
+right: button.probusx_rechts
+down: button.probusx_runter
+left: button.probusx_links
+special: button.probusx_dreitastendruck

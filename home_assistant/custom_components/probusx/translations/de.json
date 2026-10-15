@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ProBusX verbinden",
+        "description": "IP-Adresse des Waveshare mit Bridge-Firmware 3.x eingeben (ohne http://).",
+        "data": {
+          "host": "IP-Adresse oder Hostname",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Gerät nicht erreichbar. Adresse und WLAN prüfen.",
+      "invalid_firmware": "Keine unterstützte ProBusX-Bridge gefunden. Firmware 3.x erforderlich."
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits eingerichtet; die Adresse wurde aktualisiert."
+    }
+  }
+}

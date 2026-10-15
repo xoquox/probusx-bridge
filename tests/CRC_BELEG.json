@@ -1,0 +1,30 @@
+{
+  "main_frame_length": 241,
+  "crc_polynomial_reflected": "0x8408",
+  "initial": "0xffff",
+  "xor_out": 0,
+  "covered_offsets_inclusive": [
+    0,
+    237
+  ],
+  "excluded_delimiter": {
+    "offset": 238,
+    "value": "aa"
+  },
+  "crc_offsets_big_endian": [
+    239,
+    240
+  ],
+  "datasets": [
+    {
+      "raw_name": "aufnahme_09d0e9bb.bin",
+      "sha256": "22e551bae0816aaac657a57696c283def69c768bbcc8e75abbd01d49d7dafa82",
+      "main_frames_passed": 300
+    },
+    {
+      "raw_name": "tasten_7b024fb4.bin",
+      "sha256": "d32ef18f9256dd3d63e51d4486ed807cbb165fe89032ce4ae2922e0a891cf514",
+      "main_frames_passed": 60
+    }
+  ]
+}

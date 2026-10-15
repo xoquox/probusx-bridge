@@ -1,0 +1,29 @@
+# Erzeugte Entwicklungsumgebungen und Builddaten.
+.venv*/
+node_modules/
+.pio/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+firmware/sdkconfig.waveshare
+firmware/sdkconfig.waveshare.old
+firmware/src/web_assets.h
+firmware/abbilder/*
+!firmware/abbilder/README.md
+dist/
+test-ergebnisse/
+Bedienfeld_Vorschau.png
+
+# Lokale Einstellungen und private Aufnahmen.
+.env
+.env.*
+*.pbxs
+*.jsonl
+*.timed
+aufnahme*.bin
+tasten*.bin
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

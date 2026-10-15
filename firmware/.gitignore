@@ -1,0 +1,10 @@
+.pio/
+.buildenv/
+.venv/
+__pycache__/
+sdkconfig
+sdkconfig.waveshare
+sdkconfig.old
+*.pbxs
+*.summary.json
+*.jsonl

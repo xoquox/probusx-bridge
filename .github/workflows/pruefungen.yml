@@ -1,0 +1,80 @@
+name: Prüfungen und Firmware
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  basis:
+    name: Basis und Protokoll
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python tools/pruefen.py
+
+  browser:
+    name: Browser und Bedienfeld
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium --only-shell
+      - run: npm test
+
+  home-assistant:
+    name: Home-Assistant-Laufzeit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: tests/requirements-test.txt
+      - run: python -m pip install -r tests/requirements-test.txt
+      - run: python tests/test_ha_runtime.py
+
+  firmware:
+    name: Firmware bauen und prüfen
+    needs: [basis, browser, home-assistant]
+    runs-on: ubuntu-24.04
+    env:
+      PLATFORMIO_SETTING_ENABLE_TELEMETRY: 'no'
+      IDF_COMPONENT_MANAGER: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: platformio-6.2.0-espressif32-6.12.0-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini', 'firmware/sdkconfig.defaults') }}
+      - run: python -m pip install -r tools/requirements-build.txt
+      - run: python -m platformio run --project-dir firmware
+      - run: python firmware/tools/make_firmware.py
+      - run: python firmware/tools/verify_firmware.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probusx-bridge-firmware
+          path: |
+            firmware/abbilder/*.bin
+            firmware/abbilder/SHA256SUMS
+            firmware/abbilder/sdkconfig.used
+          if-no-files-found: error

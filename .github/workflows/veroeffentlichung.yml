@@ -1,0 +1,39 @@
+name: Veröffentlichung
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  pruefen:
+    uses: ./.github/workflows/pruefungen.yml
+
+  paket:
+    name: Pakete erstellen und veröffentlichen
+    needs: pruefen
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: probusx-bridge-firmware
+          path: firmware/abbilder
+      - name: Versionstag prüfen
+        env:
+          VERSION_TAG: ${{ github.ref_name }}
+        run: python tools/tag_pruefen.py
+      - run: python firmware/tools/verify_firmware.py
+      - run: python tools/paket.py
+      - name: GitHub-Veröffentlichung erstellen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_TAG: ${{ github.ref_name }}
+        run: gh release create "$VERSION_TAG" dist/*.zip dist/SHA256SUMS --verify-tag --title "ProBusX Bridge $VERSION_TAG" --notes-file AENDERUNGEN.md

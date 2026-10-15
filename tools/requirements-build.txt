@@ -1,0 +1,2 @@
+# Festgelegte Buildwerkzeuge. Die ESP32-Pakete lädt PlatformIO.
+platformio==6.2.0

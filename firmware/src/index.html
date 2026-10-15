@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ProBusX Bridge</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="eyebrow">HEIZUNGSREGLER · ROHDATENAUFNAHME</span>
+        <h1>ProBusX Bridge</h1>
+        <p id="connection" role="status">Verbindung zum Gerät wird hergestellt …</p>
+      </header>
+      <nav aria-label="Seiten">
+        <a href="/" data-page="live">Regler</a
+        ><a href="/analysis" data-page="analysis">Analyse &amp; Aufnahme</a
+        ><a href="/options" data-page="options">Optionen</a>
+      </nav>
+      <div id="notice" class="notice" role="alert" hidden></div>
+      <div id="page-live" class="page">
+        <section aria-labelledby="live-title">
+          <div class="sectionhead">
+            <h2 id="live-title">Regleranzeige</h2>
+            <span class="badge" id="live-state">Verbinden …</span>
+          </div>
+          <div class="live-console">
+            <canvas id="lcd" width="160" height="128" aria-label="Reglerdisplay"></canvas>
+            <div class="live-pad">
+              <button data-key="up" title="Hoch">▲</button
+              ><button data-key="left" title="Links">◀</button
+              ><button data-key="special" title="Grundeinstellungen">3 Tasten</button
+              ><button data-key="right" title="Rechts">▶</button
+              ><button data-key="down" title="Runter">▼</button>
+            </div>
+          </div>
+          <p id="live-values" class="hint"></p>
+          <p id="live-message" role="status"></p>
+          <button id="transmit-toggle" class="secondary" type="button">Bedienung sperren</button>
+          <p class="hint">
+            Die Freigabe wird gespeichert. Während einer Aufnahme sind Tasten automatisch gesperrt.
+          </p>
+          <div id="flex-modules" class="hint"></div>
+        </section>
+      </div>
+      <div id="page-analysis" class="page" hidden>
+        <section>
+          <div class="sectionhead">
+            <h2>Analyse &amp; Aufnahme</h2>
+            <button id="analysis-toggle" type="button" class="secondary" disabled>
+              Analyse ausschalten
+            </button>
+          </div>
+          <p id="analysis-message">
+            CRC-Prüfung schützt die Messwerte auch bei ausgeschalteter Analyse. Beim Umschalten
+            beginnen die Analysestatistiken neu.
+          </p>
+        </section>
+        <section aria-labelledby="quality-title">
+          <div class="sectionhead">
+            <h2 id="quality-title">Kommunikationsqualität</h2>
+            <span class="badge" id="quality-state">Warte auf Diagnose …</span>
+          </div>
+          <div class="metrics">
+            <div>
+              <strong id="quality-rate">–</strong><span>Bytes/s · Mittelwert letzte 60 s</span>
+            </div>
+            <div><strong id="quality-crc">–</strong><span>CRC-Fehler · letzte 60 s</span></div>
+            <div>
+              <strong id="quality-uart">–</strong><span>UART-Fehler seit Analysestart</span>
+            </div>
+          </div>
+          <p id="quality-detail" role="status"></p>
+          <p id="quality-network" class="hint"></p>
+          <div class="quality-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Telegramme</th>
+                  <th>Akzeptiert</th>
+                  <th>CRC gültig / fehlerhaft</th>
+                  <th>Letztes vor</th>
+                  <th>Längste Pause</th>
+                  <th>Unterbrechungen</th>
+                </tr>
+              </thead>
+              <tbody id="quality-families"></tbody>
+            </table>
+          </div>
+          <p class="hint">
+            Hauptdaten, F1 und Kurzstatus werden geprüft. Beim Display ist keine CRC bekannt. Pausen
+            beziehen sich auf gültige Telegramme, nicht auf geänderte Messwerte oder Bilder.
+            UART-Zeitangaben sind Software-Empfangszeiten.
+          </p>
+          <details>
+            <summary>Fehlerdetails und Ereignisse</summary>
+            <pre id="quality-errors"></pre>
+            <ol id="quality-events"></ol>
+          </details>
+          <div class="row">
+            <button id="quality-download" type="button" class="secondary" disabled>
+              Diagnosebericht herunterladen</button
+            ><span class="hint"
+              >Mit bis zu 10 Minuten Verlauf aus diesem geöffneten Browserfenster.</span
+            >
+          </div>
+        </section>
+        <section aria-labelledby="capture-title">
+          <div class="sectionhead">
+            <h2 id="capture-title">Aufnahme</h2>
+            <span class="badge" id="capture-state">Bereit</span>
+          </div>
+          <p>
+            Der Download enthält die empfangenen Busdaten und die Diagnosewerte. Während einer
+            Aufnahme werden keine Tasten gesendet.
+          </p>
+          <div class="metrics">
+            <div><strong id="bytes">0 B</strong><span>Empfangene Daten</span></div>
+            <div><strong id="elapsed">0 s</strong><span>Aufnahmedauer</span></div>
+            <div><strong id="errors">0</strong><span>Gemeldete Fehler</span></div>
+          </div>
+          <form
+            id="capture-form"
+            action="/capture"
+            method="post"
+            target="download"
+            autocomplete="off"
+          >
+            <input type="hidden" name="token" id="capture-token" /><label for="seconds"
+              >Dauer in Sekunden</label
+            >
+            <div class="row">
+              <input
+                id="seconds"
+                name="seconds"
+                type="number"
+                min="1"
+                max="3600"
+                step="1"
+                value="300"
+                required
+              /><button id="start" type="submit" disabled>
+                Aufnahme starten &amp; herunterladen</button
+              ><button id="stop" class="secondary" type="button" disabled>Aufnahme beenden</button>
+            </div>
+          </form>
+          <iframe name="download" id="download" title="Aufnahmedownload" hidden></iframe>
+          <p class="hint" id="capture-hint">
+            Der Browser speichert die Datei während der Aufnahme. WLAN-Verbindung beibehalten und
+            den Download vollständig abwarten.
+          </p>
+        </section>
+      </div>
+      <div id="page-options" class="page" hidden>
+        <section>
+          <h2>Aktualisierung und Bedienung</h2>
+          <form id="options-form">
+            <fieldset id="options-fields" disabled>
+              <label for="display-ms">Display aktualisieren (Millisekunden)</label
+              ><input
+                id="display-ms"
+                type="number"
+                min="100"
+                max="5000"
+                step="1"
+                value="250"
+                required
+              />
+              <label for="temperature-ms">Temperaturen aktualisieren (Millisekunden)</label
+              ><input
+                id="temperature-ms"
+                type="number"
+                min="250"
+                max="60000"
+                step="1"
+                value="1000"
+                required
+              />
+              <label for="output-ms">Pumpen und Ausgänge aktualisieren (Millisekunden)</label
+              ><input
+                id="output-ms"
+                type="number"
+                min="250"
+                max="60000"
+                step="1"
+                value="1000"
+                required
+              />
+              <label
+                ><input id="transmit-enabled" type="checkbox" checked /> Tastenbedienung freigeben,
+                auch nach Neustart</label
+              >
+              <label
+                ><input id="analysis-enabled" type="checkbox" checked /> Kommunikationsanalyse
+                aktiv</label
+              >
+              <button type="submit">Optionen speichern</button>
+            </fieldset>
+          </form>
+          <p id="options-message" role="status"></p>
+          <p class="hint">
+            Gilt für diese Weboberfläche und Home Assistant mit Integration 0.3.1 und aktueller
+            Bedienfeld-Karte. 1000 ms = 1 Sekunde. Der Regler liefert ungefähr alle 500 ms ein neues
+            Displaybild; kürzere Abrufintervalle verringern die Verzögerung. Änderungen werden ohne
+            Neustart übernommen.
+          </p>
+          <p class="hint">
+            Beim Einsatz einer weiteren Busbedienung die Tasten hier sperren. Während einer
+            Rohaufnahme bleibt das Senden automatisch gesperrt.
+          </p>
+        </section>
+        <section aria-labelledby="wifi-title">
+          <div class="sectionhead">
+            <h2 id="wifi-title">WLAN</h2>
+            <span class="badge" id="wifi-state">Zugangspunkt</span>
+          </div>
+          <p id="wifi-message">WLAN-Einstellungen werden geladen …</p>
+          <div id="address-box" class="address" hidden>
+            <span>Adresse in deinem normalen WLAN</span
+            ><a id="address" href="/" target="_blank" rel="noopener"></a
+            ><small id="handover"></small>
+          </div>
+          <p class="hint">
+            2,4-GHz-WLAN. Nach dem Speichern hier die neue Adresse ablesen, den PC wieder mit deinem
+            normalen WLAN verbinden und diese Adresse öffnen.
+          </p>
+          <form id="wifi-form" autocomplete="off">
+            <fieldset id="wifi-fields" disabled>
+              <div class="row">
+                <button id="scan" type="button" class="secondary">WLANs suchen</button
+                ><label class="grow" for="networks"
+                  ><span class="sr-only">Gefundene WLANs</span
+                  ><select id="networks">
+                    <option value="">WLAN auswählen oder Namen unten eingeben</option>
+                  </select></label
+                >
+              </div>
+              <label for="ssid">WLAN-Name (SSID)</label
+              ><input
+                id="ssid"
+                name="ssid"
+                type="text"
+                required
+                autocomplete="off"
+                placeholder="Dein WLAN"
+              />
+              <label for="password">WLAN-Passwort</label
+              ><input
+                id="password"
+                name="password"
+                type="password"
+                maxlength="64"
+                autocomplete="new-password"
+                placeholder="Passwort eingeben"
+              />
+              <p class="hint">
+                Für ein offenes WLAN das Passwort leer lassen. Ein gespeichertes Passwort wird nicht
+                angezeigt; bei Änderungen erneut eingeben.
+              </p>
+              <div class="row">
+                <button type="submit">WLAN speichern &amp; verbinden</button
+                ><button id="forget" class="secondary" type="button">
+                  Gespeichertes WLAN vergessen
+                </button>
+              </div>
+            </fieldset>
+          </form>
+          <p class="hint" id="fallback">
+            Ersatzzugang: ProBusX-Bridge · http://192.168.4.1 · Passwort: probusx12345
+          </p>
+        </section>
+        <section aria-labelledby="update-title">
+          <div class="sectionhead">
+            <h2 id="update-title">Firmware-Update</h2>
+            <span class="badge" id="update-state">Bereit</span>
+          </div>
+          <p>Neue Firmware über WLAN installieren. Deine WLAN-Einstellungen bleiben erhalten.</p>
+          <form id="update-form">
+            <fieldset id="update-fields" disabled>
+              <label for="firmware">Firmware-Datei auswählen</label
+              ><input id="firmware" type="file" accept=".bin,application/octet-stream" required />
+              <p class="hint">
+                ZIP zuerst entpacken und die Datei mit <strong>-ota.bin</strong> auswählen.
+              </p>
+              <button id="update-start" type="submit">Update installieren</button>
+            </fieldset>
+          </form>
+          <progress
+            id="update-progress"
+            max="100"
+            value="0"
+            aria-label="Firmwareübertragung"
+            hidden
+          ></progress>
+          <p id="update-message" role="status">
+            Für das Update muss die Aufnahme beendet sein. Das Gerät startet anschließend neu.
+          </p>
+          <p class="hint">
+            Während des Updates die Stromversorgung beibehalten. Nach dem Neustart dauert die
+            Startprüfung etwa 20 Sekunden.
+          </p>
+        </section>
+      </div>
+      <footer>
+        Firmware <span id="version">–</span> · Empfang mit 1 Mbaud ·
+        <span id="tx-footer">Bedienung gesperrt</span>
+      </footer>
+    </main>
+  </body>
+</html>

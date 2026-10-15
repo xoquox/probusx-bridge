@@ -1,0 +1,29 @@
+name: Fehler melden
+description: Einen nachvollziehbaren Fehler beschreiben.
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Verwendete Versionen
+      description: Firmware, HA-Integration und Home Assistant nennen.
+    validations:
+      required: true
+  - type: textarea
+    id: aufbau
+    attributes:
+      label: Aufbau
+      description: Regler, Waveshare-Ausführung, FlexBoxen und parallele Busbedienung nennen.
+    validations:
+      required: true
+  - type: textarea
+    id: fehler
+    attributes:
+      label: Ablauf und Fehler
+      description: Schritte, erwartetes Ergebnis und tatsächliches Ergebnis nennen.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnose
+    attributes:
+      label: Diagnose
+      description: Geprüften Diagnoseauszug ergänzen. Keine Passwörter oder Sitzungstoken einfügen.
