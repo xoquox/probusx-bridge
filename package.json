@@ -1,10 +1,10 @@
 {
   "name": "probusx-bridge-pruefungen",
-  "version": "0.3.1",
+  "version": "0.6.1",
   "private": true,
-  "description": "Browserprüfungen für die ProBusX Bridge und die HA-Karte",
+  "description": "Browserpr\u00fcfungen f\u00fcr die ProBusX Bridge und die HA-Karte",
   "scripts": {
-    "test": "node tests/test_panel.cjs && node firmware/tests/test_browser.cjs"
+    "test": "node tests/test_panel.cjs && node firmware/tests/test_browser.cjs && node firmware/tests/test_schema_browser.cjs && node firmware/tests/test_history_browser.cjs"
   },
   "devDependencies": {
     "playwright": "1.51.0",

@@ -1,3 +1,4 @@
+#include "history.h"
 #include "settings.h"
 #include "live.h"
 #include "capture_api.h"
@@ -336,6 +337,20 @@ static bool read_request(int fd, Request &request) {
 // Verbindet Aufnahmeauftrag und Datenempfänger. Der Aufrufer hält die Vorgangsreservierung.
 // Ein langsamer Download darf den UART-Empfang nicht anhalten.
 bool capture_run(uint32_t duration_ms, CaptureSink sink, void *context) {
+  // Den Rohpuffer nur für diese Aufnahme reservieren. Bei Bedarf alte Verlaufsblöcke abgeben.
+  void *storage = history_capture_allocate(RING_BYTES);
+  if (!storage) {
+    portENTER_CRITICAL(&status_mux);
+    strcpy(last_result, "memory_error");
+    portEXIT_CRITICAL(&status_mux);
+    return false;
+  }
+  ring = xRingbufferCreateStatic(RING_BYTES, RINGBUF_TYPE_NOSPLIT, static_cast<uint8_t *>(storage),
+                                 &ring_control);
+  if (!ring) {
+    history_capture_release(storage);
+    return false;
+  }
   wifi_prepare_capture();
   cancelled = false;
   stop_requested = false;
@@ -373,6 +388,10 @@ bool capture_run(uint32_t duration_ms, CaptureSink sink, void *context) {
   strcpy(last_result, complete ? (stop_requested ? "stopped" : "complete") : "interrupted");
   portEXIT_CRITICAL(&status_mux);
   active = false;
+  // RX_IDLE ist gesetzt und alle entliehenen Datensätze sind zurückgegeben.
+  vRingbufferDelete(ring);
+  ring = nullptr;
+  history_capture_release(storage);
   return complete;
 }
 static bool tcp_sink(void *context, const uint8_t *data, size_t size) {
@@ -435,23 +454,16 @@ extern "C" void app_main() {
   ESP_ERROR_CHECK(gpio_config(&pins));
 
   ota_boot_start();
-  auto *storage =
-      static_cast<uint8_t *>(heap_caps_malloc(RING_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-  if (!storage) {
-    ESP_LOGE(TAG,
-             "2 MiB PSRAM nicht verfügbar. Platine und Octal-PSRAM prüfen. Sender bleibt aus.");
-    return;
-  }
-  ring = xRingbufferCreateStatic(RING_BYTES, RINGBUF_TYPE_NOSPLIT, storage, &ring_control);
   requests = xQueueCreate(1, sizeof(Request));
   state = xEventGroupCreate();
   operation = xSemaphoreCreateBinary();
-  configASSERT(ring && requests && state && operation);
+  configASSERT(requests && state && operation);
   xSemaphoreGive(operation);
   ESP_ERROR_CHECK(esp_read_mac(mac, ESP_MAC_WIFI_STA));
   // Einstellungen vor dem Empfangstask laden. NVS hier nicht löschen.
   ESP_ERROR_CHECK(nvs_flash_init());
   live_init();
+  history_init();
   configASSERT(xTaskCreatePinnedToCore(rx_task, "probusx_rx", 8192, nullptr, 18, nullptr, 1) ==
                pdPASS);
   xEventGroupWaitBits(state, RX_READY, pdFALSE, pdTRUE, portMAX_DELAY);

@@ -21,8 +21,10 @@
 2. Der Parser sammelt ein Telegramm anhand seiner festen Länge.
 3. Bekannte CRC-Familien werden vor der Übernahme geprüft.
 4. Der Live-Speicher übernimmt gültige Werte und vollständige Bilder.
-5. Die HTTP-Schnittstelle stellt einen Schnappschuss bereit.
-6. Home Assistant erzeugt daraus Sensoren und Kamerabilder.
+5. Der MQTT-Task kopiert einen Schnappschuss unter kurzer Live-Sperre.
+6. Nach Freigabe der Sperre sendet er JSON, PNG und Discovery zum Broker.
+7. Die native MQTT-Integration in HA erzeugt Sensoren, Kamera und Tasten.
+8. HTTP stellt dieselben Busdaten für die direkte Weboberfläche bereit.
 
 Die TCP- und UART-Blockgrenzen können mitten in einem Telegramm liegen.
 Ein Block ist daher kein Busframe.
@@ -53,7 +55,7 @@ So hält ein Flashzugriff den Busparser nicht unnötig an.
 
 ## Tasten senden
 
-Ein HTTP-Aufruf merkt einen Tastenvorgang vor.
+Ein MQTT-Befehl oder HTTP-Aufruf merkt über dieselbe Funktion einen Tastenvorgang vor.
 Die Firmware wartet auf `A5 13 36 01 34 50 C3`.
 Sie prüft zusätzlich das Ende des Leseblocks und den UART-Empfangspuffer.
 Dann schaltet sie den Bustreiber für genau die Antwort ein.
@@ -63,6 +65,15 @@ Diese Prüfung ersetzt keine Messung der elektrischen Umschaltzeit.
 Die Anwendung legt auch keine GPIO-Pegel während Bootloader und Reset fest.
 
 ## Home Assistant
+
+Die neue Verbindung verwendet die [native MQTT-Anbindung](MQTT.md).
+`mqtt_bridge.cpp` enthält Client, NVS-Einstellungen und Hintergrundtask.
+`mqtt_discovery.h` erzeugt die 61 Discovery-Datensätze.
+`mqtt_policy.h` enthält die prüfbaren Regeln und den PNG-Encoder.
+Die Weboberfläche erhält keine MQTT-Zugangsdaten aus dem Status.
+Der Ausfall des Brokers ändert die WLAN-Bindung und den Ersatzzugangspunkt nicht.
+
+Die folgenden Absätze beschreiben die frühere HTTP-Integration:
 
 `Coordinator` bündelt die Statusabrufe aller Entities.
 Temperaturen und Ausgänge haben getrennte Übernahmeintervalle.
@@ -75,8 +86,32 @@ Ein möglicherweise ausgeführter Tastendruck wird nicht wiederholt.
 
 ## Webdateien
 
+`wifi_policy.h` enthält die gemeinsamen Regeln für BSSID und WLAN-Speicherung.
+Die WLAN-Aufträge verwenden denselben Vorgangsschutz wie bisher.
+Der NVS-Datensatz der Version 2 ist 112 Byte lang.
+Der frühere 104-Byte-Datensatz wird als automatische Wahl übernommen.
+Unlesbare Bindungsdaten erlauben keine automatische Verbindung.
+
+Die Suchliste liegt dynamisch im Heap.
+Die Zahl der Ergebnisse kommt aus `esp_wifi_scan_get_ap_num`.
+`esp_wifi_scan_get_ap_records` liest die vollständige Liste.
+Die WLAN-Statusantwort erzeugt JSON unter der Modellsperre.
+Der UART-Empfang verwendet diese Sperre nicht.
+
 `index.html`, `app.js` und `style.css` sind die bearbeitbaren Quellen.
 `embed_assets.py` erzeugt daraus `web_assets.h`.
 Diese Datei wird in die Firmware eingebettet.
 Sie darf nicht von Hand bearbeitet werden.
 Der PlatformIO-Vorlauf erzeugt sie bei jedem erforderlichen Build neu.
+
+## Schema-Anzeige
+
+`schema.js` verwaltet die Bildfläche und die Bearbeitung im Browser. Live-Werte stammen
+aus derselben API wie die übrigen Anzeigen. `schema.cpp` prüft Uploads, serialisiert
+Aufträge und bedient den Schema-Speicher. `schema_validation.h` prüft Layout und Bildköpfe.
+`schema_store.h` enthält den atomaren Bankwechsel und die CRC-Prüfung.
+Die Speicherkarte steht unter [Heizungsschema](Heizungsschema.md).
+
+## Lokaler Verlauf
+
+Ab Firmware 3.6.0: Siehe [Verlauf](Verlauf.md) für Bedienung, Speicheraufteilung und Grenzen.

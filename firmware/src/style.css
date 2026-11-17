@@ -17,35 +17,50 @@ body {
     16px/1.55 system-ui,
     sans-serif;
 }
-main {
-  max-width: 980px;
+/* Kopf und Navigation teilen eine feste linke Spalte. Der Inhalt beginnt oben daneben. */
+.app-layout {
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+  max-width: 1920px;
   margin: 0 auto;
-  padding: 36px 20px 24px;
+  padding: 16px;
 }
-.eyebrow {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--accent);
+.sidebar {
+  position: sticky;
+  top: 16px;
+  padding: 18px 16px;
+  background: white;
+  border: 1px solid var(--line);
+  --cut: var(--cut-large);
+  --cut-line: var(--line);
 }
-h1 {
-  font-size: clamp(28px, 5vw, 40px);
-  line-height: 1.15;
-  margin: 10px 0;
+main {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
 }
-header {
-  margin-bottom: 26px;
+.page {
+  max-width: 1180px;
 }
 header p {
-  margin: 0;
+  margin: 12px 0 0;
   color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+h1 {
+  font-size: 22px;
+  line-height: 1.15;
+  margin: 0;
 }
 section {
   background: white;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 0;
   padding: 26px;
-  margin: 18px 0;
+  margin: 0 0 18px;
   box-shadow: 0 4px 18px #16392d05;
 }
 .sectionhead {
@@ -63,7 +78,7 @@ h2 {
   font-weight: 650;
   padding: 4px 12px;
   background: var(--pale);
-  border-radius: 24px;
+  border-radius: 0;
   white-space: nowrap;
 }
 p {
@@ -73,12 +88,13 @@ p {
 .metrics {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin: 24px 0;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0;
 }
 .metrics div {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 0;
   padding: 15px;
 }
 .metrics strong {
@@ -98,7 +114,7 @@ input,
 select,
 button {
   font: inherit;
-  border-radius: 8px;
+  border-radius: 0;
   min-height: 45px;
 }
 input,
@@ -112,6 +128,21 @@ select {
 }
 #seconds {
   max-width: 120px;
+}
+#networks {
+  min-height: 180px;
+  font-size: 14px;
+}
+#networks option {
+  padding: 6px 8px;
+}
+#bssid {
+  max-width: 330px;
+  font-family: monospace;
+}
+#wifi-current-ap {
+  color: var(--ink);
+  overflow-wrap: anywhere;
 }
 button {
   border: 1px solid var(--accent);
@@ -165,7 +196,7 @@ fieldset {
 .address {
   background: var(--pale);
   padding: 14px 18px;
-  border-radius: 9px;
+  border-radius: 0;
   margin-top: 15px;
 }
 .address span,
@@ -182,12 +213,14 @@ fieldset {
   background: #fff3d9;
   border: 1px solid #dfc28a;
   padding: 14px 18px;
-  border-radius: 10px;
+  border-radius: 0;
 }
 footer {
   color: var(--muted);
   font-size: 12px;
-  margin: 25px 0;
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 .sr-only {
   position: absolute;
@@ -201,7 +234,7 @@ footer {
 }
 @media (max-width: 600px) {
   main {
-    padding: 24px 12px;
+    padding: 0;
   }
   section {
     padding: 20px 16px;
@@ -255,14 +288,16 @@ progress {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 60px;
+  gap: 32px;
+  flex-wrap: wrap;
   background: #69b7c5;
-  padding: 30px;
-  border-radius: 8px;
+  padding: 24px;
+  border-radius: 0;
 }
 .live-console canvas {
-  width: 480px;
-  height: 384px;
+  width: min(480px, 100%);
+  height: auto;
+  aspect-ratio: 5 / 4;
   image-rendering: pixelated;
   background: white;
   border: 5px inset #8ccad3;
@@ -340,13 +375,14 @@ progress {
 }
 nav {
   display: flex;
-  gap: 12px;
-  margin: 24px 0;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0;
 }
 nav a {
-  padding: 12px 22px;
+  padding: 10px 12px;
   border: 1px solid #c5d6da;
-  border-radius: 9px;
+  border-radius: 0;
   color: #24515b;
   text-decoration: none;
   background: #fff;
@@ -386,4 +422,462 @@ fieldset input[type='checkbox'] {
   margin: 0;
   padding: 0;
   flex-shrink: 0;
+}
+
+/* Die Schemafläche nutzt den Desktop. Positionen sind Anteile der Bildmaße. */
+body.schema-wide .page {
+  max-width: none;
+}
+#page-schema section {
+  padding: 18px;
+}
+#page-schema .sectionhead {
+  margin-bottom: 16px;
+}
+#schema-message:empty {
+  display: none;
+}
+.schema-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.schema-workspace:has(.schema-editor:not([hidden])) {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+.schema-view {
+  min-width: 0;
+}
+.schema-stage {
+  position: relative;
+  /* Bild und Marker nutzen dieselbe Fläche, ohne Leerstreifen durch object-fit. */
+  width: min(100%, calc((100dvh - 178px) * var(--schema-ratio, 1.666667)));
+  overflow: hidden;
+  background: white;
+  border: 1px solid var(--line);
+}
+.schema-stage img {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+.schema-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.schema-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: #fffffff2;
+  border: 1px solid #83999d;
+  border-radius: 0;
+  padding: 3px 8px;
+  box-shadow: 0 1px 4px #172e3930;
+  color: #12392f;
+  white-space: nowrap;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 15px;
+  line-height: 1.35;
+  user-select: none;
+}
+.schema-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.schema-marker.output {
+  color: #52616b;
+}
+.schema-marker.output.is-on {
+  background: #e6f7e6f2;
+  color: #20552c;
+  border-color: #498655;
+}
+.schema-marker.stale {
+  color: #777;
+  background: #eeeeeee8;
+  border-style: dashed;
+}
+.schema-stage.editing .schema-marker {
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+.schema-stage.editing .schema-marker.selected {
+  outline: 3px solid #087bba;
+  z-index: 2;
+}
+.schema-empty {
+  padding: 90px 30px;
+  text-align: center;
+  border: 2px dashed var(--line);
+  background: #fafcfb;
+}
+.schema-editor {
+  border-left: 1px solid var(--line);
+  padding-left: 20px;
+  max-height: calc(100dvh - 136px);
+  overflow-y: auto;
+}
+.schema-editor h3 {
+  font-size: 17px;
+  margin: 0 0 12px;
+}
+.schema-editor button {
+  margin: 6px 0;
+}
+.schema-editor .hint {
+  font-size: 13px;
+}
+.schema-editor hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 20px 0;
+}
+.schema-list {
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 14px 0;
+}
+.schema-list-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.schema-list-row input[type='checkbox'] {
+  width: 18px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+.schema-list-row button {
+  flex: 1;
+  margin: 3px 0;
+  padding: 7px 9px;
+  text-align: left;
+  background: #edf2f1;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.schema-list-row button[aria-pressed='true'] {
+  border-color: #087bba;
+  background: #e4f2fa;
+}
+.schema-coordinates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .schema-workspace:has(.schema-editor:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .schema-editor {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 20px 0 0;
+  }
+}
+
+/* Abgeschrägte Ecken. Die diagonalen Kanten bleiben genau 45 Grad.
+   Die vier Verläufe zeichnen auch an den Schnittkanten einen dünnen Rand. */
+:root {
+  --cut-small: 6px;
+  --cut-large: 12px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand-logo {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.brand h1 {
+  margin: 0;
+}
+section {
+  --cut: var(--cut-large);
+  --cut-line: var(--line);
+  box-shadow: none;
+}
+button,
+nav a,
+input:not([type='checkbox']):not([type='radio']):not([type='file']),
+select,
+.badge,
+.metrics div,
+.address,
+.notice,
+.live-console,
+.schema-marker {
+  --cut: var(--cut-small);
+  --cut-line: var(--line);
+}
+button {
+  --cut-line: var(--accent);
+}
+nav a {
+  --cut-line: #c5d6da;
+}
+nav a[aria-current='page'] {
+  --cut-line: #245e6b;
+}
+input:not([type='checkbox']):not([type='radio']):not([type='file']),
+select {
+  --cut-line: #aebfc5;
+}
+.notice {
+  --cut-line: #dfc28a;
+}
+.live-console {
+  --cut-line: #69b7c5;
+}
+.schema-marker {
+  --cut: 4px;
+  --cut-line: #83999d;
+  box-shadow: none;
+}
+.schema-marker.output.is-on {
+  --cut-line: #498655;
+}
+.sidebar,
+section,
+button,
+nav a,
+input:not([type='checkbox']):not([type='radio']):not([type='file']),
+select,
+.badge,
+.metrics div,
+.address,
+.notice,
+.live-console,
+.schema-marker {
+  border-radius: 0;
+  clip-path: polygon(
+    var(--cut) 0,
+    calc(100% - var(--cut)) 0,
+    100% var(--cut),
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    var(--cut) 100%,
+    0 calc(100% - var(--cut)),
+    0 var(--cut)
+  );
+  --corner-lines:
+    linear-gradient(135deg, var(--cut-line) calc(var(--cut) * 0.70710678 + 1px), transparent 0),
+    linear-gradient(225deg, var(--cut-line) calc(var(--cut) * 0.70710678 + 1px), transparent 0),
+    linear-gradient(315deg, var(--cut-line) calc(var(--cut) * 0.70710678 + 1px), transparent 0),
+    linear-gradient(45deg, var(--cut-line) calc(var(--cut) * 0.70710678 + 1px), transparent 0);
+  background-image: var(--corner-lines);
+  background-position:
+    top left,
+    top right,
+    bottom right,
+    bottom left;
+  background-size: var(--cut) var(--cut);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+}
+/* Ein äußerer Fokusrahmen würde vom Schrägschnitt abgeschnitten.
+   Der innere Rahmen bleibt für die Tastaturbedienung sichtbar. */
+button:focus-visible,
+nav a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 0;
+  box-shadow: inset 0 0 0 3px #67c5b6;
+}
+.schema-stage.editing .schema-marker.selected {
+  outline: 0;
+  box-shadow: inset 0 0 0 3px #087bba;
+}
+
+/* Diese Varianten setzen zuvor den Hintergrund als Kurzschreibweise.
+   Die Ecklinien danach wieder ergänzen, ohne die jeweilige Flächenfarbe zu ändern. */
+button.secondary,
+nav a[aria-current='page'],
+.schema-list-row button,
+.schema-marker.output.is-on,
+.schema-marker.stale,
+#quality-state[data-level] {
+  background-image: var(--corner-lines);
+}
+
+@media (max-width: 1000px) {
+  .app-layout {
+    grid-template-columns: 188px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+  }
+  .sidebar {
+    top: 12px;
+    padding: 14px 12px;
+  }
+  .brand-logo {
+    width: 40px;
+    height: 40px;
+  }
+  .brand h1 {
+    font-size: 20px;
+  }
+}
+
+/* Messwerte gehören in getrennte Geräteblöcke direkt unter die Regleranzeige. */
+.values-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.75fr);
+  gap: 18px;
+  align-items: start;
+}
+.value-panel {
+  padding: 20px;
+}
+.value-panel h2 {
+  font-size: 21px;
+  margin-bottom: 16px;
+}
+.value-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.value-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+.value-table th,
+.value-table td {
+  padding: 8px 7px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.value-table thead th {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.value-table td {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+.value-table tbody tr:nth-child(even) {
+  background: #f5f8f7;
+}
+.value-table .value-on {
+  color: #176b3a;
+  background: #e7f5eb;
+}
+.value-table .value-stale {
+  color: #84939b;
+}
+#page-history {
+  max-width: none;
+}
+.history-range {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(210px, 1fr) minmax(210px, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+.history-range label {
+  margin: 0;
+}
+.history-range label input,
+.history-range label select {
+  margin-top: 7px;
+}
+.history-range button {
+  margin-top: 4px;
+}
+.chart-panel {
+  padding: 20px;
+}
+.chart-panel .sectionhead {
+  flex-wrap: wrap;
+}
+.chart-panel h2 {
+  font-size: 22px;
+}
+.chart-panel .row button {
+  min-height: 34px;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+  margin: 18px 0 8px;
+}
+.chart-channel {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  margin: 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+.chart-channel input {
+  appearance: auto;
+  width: 15px;
+  height: 15px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+.chart-swatch {
+  width: 16px;
+  height: 3px;
+  display: inline-block;
+}
+.history-chart {
+  display: block;
+  width: 100%;
+  height: 360px;
+  touch-action: none;
+  user-select: none;
+  cursor: crosshair;
+}
+.chart-tooltip {
+  font-size: 12px;
+  min-height: 2.8em;
+  font-variant-numeric: tabular-nums;
+}
+.check-line {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.check-line input[type='checkbox'] {
+  min-height: 0;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+}
+.check-line:has(input:disabled) {
+  color: #8b969b;
+}
+#history-interval {
+  max-width: 240px;
+}
+@media (max-width: 1200px) {
+  .values-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .history-range {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

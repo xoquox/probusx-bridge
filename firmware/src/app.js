@@ -1,5 +1,55 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
+// Nur echte Bedienung verlängert die Anzeigezeit. Abrufe zählen nicht als Bedienung.
+const idleLimitMs = 60 * 60 * 1000;
+let lastInteraction = Date.now(),
+  browserPaused = false;
+let restartPhase = false,
+  restartToken = '',
+  restartUntil = 0;
+const automaticRequests = new Set();
+function automaticAllowed() {
+  if (
+    !browserPaused &&
+    Date.now() - lastInteraction >= idleLimitMs &&
+    updatePhase === 'idle' &&
+    !operationPending &&
+    !restartPhase &&
+    !state?.capture?.busy &&
+    Date.now() >= pendingUntil
+  ) {
+    browserPaused = true;
+    $('idle-banner').hidden = false;
+    for (const controller of automaticRequests) controller.abort();
+  }
+  return !browserPaused;
+}
+function resumeFromInteraction(event) {
+  if (!event.isTrusted) return;
+  // Den Fortsetzen-Knopf nicht schon beim Anfahren mit der Maus verschieben.
+  if (browserPaused && event.type === 'pointermove') return;
+  lastInteraction = Date.now();
+  browserPaused = false;
+  $('idle-banner').hidden = true;
+}
+for (const name of ['pointerdown', 'click', 'pointermove', 'keydown', 'wheel', 'input'])
+  document.addEventListener(name, resumeFromInteraction, { capture: true, passive: true });
+// Laufende Abrufe beim Pausieren abbrechen. Auch das Lesen der Antwort gehört zum Abruf.
+async function automaticRead(path, timeout, binary = false) {
+  const controller = new AbortController();
+  automaticRequests.add(controller);
+  try {
+    const response = await fetch(path, {
+      cache: 'no-store',
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeout)]),
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    return binary ? await response.arrayBuffer() : await response.json();
+  } finally {
+    automaticRequests.delete(controller);
+  }
+}
+setInterval(automaticAllowed, 1000);
 let updatePhase = 'idle',
   updateToken = '',
   updateUntil = 0,
@@ -22,6 +72,11 @@ function humanBytes(n) {
       ? (n / 1e3).toFixed(1) + ' kB'
       : n + ' B';
 }
+function updateApMode() {
+  const fixed = $('ap-mode').value === 'fixed';
+  $('bssid').disabled = !fixed;
+  $('bssid').required = fixed;
+}
 // Asynchroner Oberflächenaufruf. Die Anzeige meldet Fehler und blockiert den Empfang nicht.
 async function post(path, values = {}) {
   const response = await fetch(path, {
@@ -29,11 +84,73 @@ async function post(path, values = {}) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ token, ...values }),
     cache: 'no-store',
+    signal: AbortSignal.timeout(8000),
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'Aktion fehlgeschlagen.');
   return result;
 }
+let mqttTouched = false;
+function renderMqtt(m, locked) {
+  $('mqtt-fields').disabled = locked || !m;
+  if (!m) {
+    $('mqtt-state').textContent = 'Firmware ohne MQTT';
+    return;
+  }
+  $('mqtt-state').textContent = !m.enabled
+    ? 'Ausgeschaltet'
+    : m.connected
+      ? 'Verbunden'
+      : 'Verbindet …';
+  $('mqtt-message').textContent = m.message;
+  $('mqtt-detail').textContent =
+    'Topic: ' +
+    m.root +
+    ' · Verbindungen: ' +
+    m.connections +
+    ' · Sendefehler: ' +
+    m.publish_errors +
+    ' · Abgelehnte Tasten: ' +
+    m.rejected_keys;
+  if (!mqttTouched) {
+    $('mqtt-enabled').checked = m.enabled;
+    $('mqtt-host').value = m.host;
+    $('mqtt-port').value = m.port;
+    $('mqtt-tls').checked = m.tls;
+    $('mqtt-username').value = m.username;
+  }
+  $('mqtt-password-hint').textContent = m.password_set
+    ? 'Passwort gespeichert. Leer lassen, um es zu behalten.'
+    : 'Noch kein Passwort gespeichert.';
+}
+$('mqtt-form').addEventListener('input', () => {
+  mqttTouched = true;
+});
+$('mqtt-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if ($('mqtt-fields').disabled) return;
+  const fields = {
+    enabled: $('mqtt-enabled').checked ? '1' : '0',
+    host: $('mqtt-host').value.trim(),
+    port: $('mqtt-port').value,
+    tls: $('mqtt-tls').checked ? '1' : '0',
+    username: $('mqtt-username').value,
+    password: $('mqtt-password').value,
+    clear_password: $('mqtt-clear-password').checked ? '1' : '0',
+  };
+  if (fields.enabled === '1' && !fields.host) {
+    $('mqtt-save-message').textContent = 'Bitte den Broker angeben.';
+    return;
+  }
+  if (await action('/api/mqtt', fields)) {
+    $('mqtt-password').value = '';
+    $('mqtt-clear-password').checked = false;
+    pendingUntil = Date.now() + 1500;
+    mqttTouched = false;
+    $('mqtt-save-message').textContent =
+      'Einstellung angenommen. Speicher- und Verbindungsstatus oben prüfen.';
+  }
+});
 function render(s) {
   state = s;
   token = s.token;
@@ -44,7 +161,23 @@ function render(s) {
     stats = c.statistics || {};
   const waiting = Date.now() < pendingUntil;
   const updating = updatePhase !== 'idle';
-  const locked = c.busy || waiting || operationPending || updating || !!s.ota?.pending_verify;
+  const locked =
+    c.busy ||
+    waiting ||
+    operationPending ||
+    updating ||
+    restartPhase ||
+    !!s.restart_pending ||
+    !!s.ota?.pending_verify;
+  $('restart').disabled = locked;
+  if (restartPhase && s.token !== restartToken && !s.ota?.pending_verify) {
+    restartPhase = false;
+    $('restart-message').textContent = 'Neustart abgeschlossen. Die Bridge ist wieder erreichbar.';
+  } else if (restartPhase && Date.now() > restartUntil) {
+    restartPhase = false;
+    $('restart-message').textContent =
+      'Neustart nicht bestätigt. Geräteadresse oder Ersatzzugangspunkt prüfen.';
+  }
   $('update-fields').disabled = locked;
   $('update-state').textContent = s.ota?.pending_verify
     ? 'Startprüfung'
@@ -94,6 +227,8 @@ function render(s) {
   $('seconds').disabled = c.active;
   $('stop').disabled = !c.active;
   $('wifi-fields').disabled = locked;
+  renderMqtt(s.mqtt, locked);
+  window.probusxHistoryOptions?.update(s.history, locked);
   $('bytes').textContent = humanBytes(stats.rx_bytes || 0);
   $('elapsed').textContent = Math.floor((stats.elapsed_us || 0) / 1e6) + ' s';
   const errors = [
@@ -124,7 +259,25 @@ function render(s) {
       ? 'Suche läuft'
       : 'Zugangspunkt / Verbindungssuche';
   $('wifi-message').textContent = w.message;
-  $('scan').textContent = w.scanning ? 'Suche läuft …' : 'WLANs suchen';
+  $('wifi-current-ap').textContent =
+    w.connected && w.connected_bssid
+      ? 'Verbunden: ' +
+        w.ssid +
+        ' · BSSID ' +
+        w.connected_bssid +
+        ' · Kanal ' +
+        w.connected_channel +
+        ' · ' +
+        w.connected_rssi +
+        ' dBm'
+      : w.connected
+        ? 'Verbunden. Zugangspunktdaten werden abgefragt …'
+        : 'Zurzeit keine Verbindung mit dem Heim-WLAN.';
+  $('wifi-saved-binding').textContent =
+    w.ap_mode === 'fixed'
+      ? 'Gespeicherte Wahl: feste Bindung an ' + w.selected_bssid
+      : 'Gespeicherte Wahl: automatisch';
+  $('scan').textContent = w.scanning ? 'Suche läuft …' : 'Zugangspunkte suchen';
   $('address-box').hidden = !w.connected || !w.ip;
   if (w.connected && w.ip) {
     $('address').textContent = 'http://' + w.ip;
@@ -141,37 +294,55 @@ function render(s) {
   $('fallback').textContent =
     'Ersatzzugang: ProBusX-Bridge · http://192.168.4.1 · Passwort: probusx12345 · ' +
     (w.ap ? 'zurzeit aktiv' : 'zurzeit aus');
-  if (!formTouched && w.ssid) $('ssid').value = w.ssid;
-  const signature = JSON.stringify(w.networks);
+  if (!formTouched) {
+    $('ssid').value = w.ssid || '';
+    $('ap-mode').value = w.ap_mode === 'fixed' ? 'fixed' : 'auto';
+    $('bssid').value = w.selected_bssid || '';
+  }
+  updateApMode();
+  const networks = Array.isArray(w.networks) ? w.networks : [];
+  const signature = JSON.stringify(networks);
   if (signature !== networksSignature) {
     networksSignature = signature;
-    $('networks').replaceChildren(new Option('WLAN auswählen oder Namen unten eingeben', ''));
-    const seen = new Set();
-    for (const n of w.networks) {
-      if (seen.has(n.ssid)) continue;
-      seen.add(n.ssid);
+    const selected = $('networks').value;
+    $('networks').replaceChildren(new Option('Zugangspunkt wählen oder Daten unten eingeben', ''));
+    // BSSID als Schlüssel verwenden. Gleiche SSIDs bleiben verschiedene, wählbare Einträge.
+    for (const n of networks) {
       const option = new Option(
-        n.ssid + ' · ' + n.rssi + ' dBm' + (n.open ? ' · offen' : ''),
-        n.ssid,
+        (n.ssid || '(SSID verborgen)') +
+          ' · ' +
+          n.bssid +
+          ' · Kanal ' +
+          n.channel +
+          ' · ' +
+          n.rssi +
+          ' dBm' +
+          (n.open ? ' · offen' : ''),
+        n.bssid,
       );
       $('networks').add(option);
     }
+    $('networks').value = $('bssid').value || selected;
   }
+  $('wifi-scan-count').textContent = networks.length + ' Zugangspunkte';
 }
 async function poll() {
+  if (!automaticAllowed()) {
+    setTimeout(poll, 1000);
+    return;
+  }
   try {
-    const response = await fetch('/api/status', {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(4000),
-    });
-    if (!response.ok) throw new Error('Status nicht verfügbar');
-    render(await response.json());
+    render(await automaticRead('/api/status', 4000));
   } catch (error) {
+    if (browserPaused) return;
+    $('restart').disabled = true;
     $('connection').textContent =
       'Verbindung zum Gerät unterbrochen. Nach WLAN-Wechsel die neue IP-Adresse öffnen.';
     $('start').disabled = true;
     $('stop').disabled = true;
     $('wifi-fields').disabled = true;
+    $('mqtt-fields').disabled = true;
+    $('history-options-fields').disabled = true;
     $('update-fields').disabled = true;
     if (updatePhase === 'reboot')
       $('update-message').textContent =
@@ -185,11 +356,23 @@ async function poll() {
 $('ssid').addEventListener('input', () => {
   formTouched = true;
 });
+$('ap-mode').addEventListener('change', () => {
+  formTouched = true;
+  updateApMode();
+});
+$('bssid').addEventListener('input', () => {
+  formTouched = true;
+});
 $('networks').addEventListener('change', () => {
-  if ($('networks').value) {
-    $('ssid').value = $('networks').value;
-    formTouched = true;
-  }
+  const selected = state?.wifi.networks?.find((n) => n.bssid === $('networks').value);
+  if (!selected) return;
+  $('ssid').value = selected.ssid || '';
+  $('bssid').value = selected.bssid;
+  $('ap-mode').value = 'fixed';
+  formTouched = true;
+  updateApMode();
+  if (!selected.ssid)
+    notice('Der WLAN-Name ist verborgen. Den bekannten WLAN-Namen unten eingeben.');
 });
 $('capture-form').addEventListener('submit', (event) => {
   if (
@@ -240,6 +423,21 @@ async function action(path, values) {
     operationPending = false;
   }
 }
+$('restart').addEventListener('click', async () => {
+  if ($('restart').disabled || !confirm('Bridge jetzt neu starten?')) return;
+  restartPhase = true;
+  restartToken = token;
+  restartUntil = Date.now() + 90000;
+  if (state) render(state);
+  $('restart-message').textContent = 'Neustart angefordert. Bitte warten …';
+  try {
+    await post('/api/restart');
+  } catch (error) {
+    restartPhase = false;
+    $('restart-message').textContent = error.message;
+    if (state) render(state);
+  }
+});
 $('scan').addEventListener('click', async () => {
   notice('Netzwerksuche läuft …');
   await action('/api/scan');
@@ -255,7 +453,15 @@ $('wifi-form').addEventListener('submit', async (event) => {
     return;
   }
   notice('WLAN wird gespeichert. Die Verbindung kann kurz unterbrochen werden.');
-  if (await action('/api/wifi', { ssid: $('ssid').value, password: $('password').value }))
+  const fixed = $('ap-mode').value === 'fixed';
+  if (
+    await action('/api/wifi', {
+      ssid: $('ssid').value,
+      password: $('password').value,
+      ap_mode: fixed ? 'fixed' : 'auto',
+      bssid: fixed ? $('bssid').value.trim() : '',
+    })
+  )
     $('password').value = '';
 });
 $('forget').addEventListener('click', async () => {
@@ -263,6 +469,10 @@ $('forget').addEventListener('click', async () => {
   if (await action('/api/forget')) {
     $('ssid').value = '';
     $('password').value = '';
+    $('ap-mode').value = 'auto';
+    $('bssid').value = '';
+    $('networks').value = '';
+    updateApMode();
     formTouched = false;
     notice(
       'WLAN wird vergessen. Bei Verbindungsabbruch mit dem Zugangspunkt ProBusX-Bridge verbinden.',
@@ -375,12 +585,17 @@ let optionsTouched = false,
   lastTemperatures = 0,
   lastOutputs = 0;
 const activePage =
-  location.pathname === '/analysis'
-    ? 'analysis'
-    : location.pathname === '/options'
-      ? 'options'
-      : 'live';
-for (const name of ['live', 'analysis', 'options']) $('page-' + name).hidden = name !== activePage;
+  location.pathname === '/history'
+    ? 'history'
+    : location.pathname === '/schema'
+      ? 'schema'
+      : location.pathname === '/analysis'
+        ? 'analysis'
+        : location.pathname === '/options'
+          ? 'options'
+          : 'live';
+for (const name of ['live', 'schema', 'history', 'analysis', 'options'])
+  $('page-' + name).hidden = name !== activePage;
 for (const link of document.querySelectorAll('nav a'))
   if (link.dataset.page === activePage) link.setAttribute('aria-current', 'page');
 $('options-form').addEventListener('input', () => (optionsTouched = true));
@@ -446,6 +661,7 @@ async function liveCommand(path, fields) {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ token: liveState.token, ...fields }),
+    signal: AbortSignal.timeout(8000),
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'Anfrage fehlgeschlagen');
@@ -468,12 +684,95 @@ $('transmit-toggle').onclick = async () => {
     $('live-message').textContent = e.message;
   }
 };
+
+// Tabellen bleiben getrennt nach Gerät. Nur die Wertzellen werden aktualisiert.
+const outputNames = [
+  'R1',
+  'R2',
+  'R3',
+  'R4',
+  'R5',
+  'R6',
+  'R7',
+  'R0',
+  'HE1',
+  'HE2',
+  'HE3',
+  'F1R1',
+  'F1R2',
+  'F1R3',
+  'F1HE',
+];
+function valueTable(id, labels, group, offset) {
+  const table = document.createElement('table');
+  table.className = 'value-table';
+  const head = table.createTHead().insertRow();
+  for (const text of [
+    group === 't' ? 'Eingang' : 'Ausgang',
+    group === 't' ? 'Temperatur' : 'Stellwert',
+  ]) {
+    const th = document.createElement('th');
+    th.textContent = text;
+    head.append(th);
+  }
+  const body = table.createTBody();
+  labels.forEach((label, i) => {
+    const row = body.insertRow();
+    const name = document.createElement('th');
+    name.scope = 'row';
+    name.textContent = label;
+    row.append(name);
+    const td = row.insertCell();
+    td.dataset.value = group + (offset + i);
+    td.textContent = '–';
+  });
+  $(id).replaceChildren(table);
+}
+valueTable(
+  'live-values',
+  Array.from({ length: 10 }, (_, i) => 'S' + (i + 1)),
+  't',
+  0,
+);
+valueTable('live-outputs', outputNames.slice(0, 11), 'o', 0);
+valueTable('flex-inputs', ['S1', 'S2', 'S3', 'S4'], 't', 10);
+valueTable('flex-outputs', ['R1', 'R2', 'R3', 'HE'], 'o', 11);
+function flexVisible(s) {
+  const on = s.flex1_enabled ?? state?.history?.flex1 ?? true;
+  $('flex-modules').hidden = !on;
+  return on;
+}
+function renderTemperatures(s, fresh) {
+  const ext = flexVisible(s) && s.ext_age_ms >= 0 && s.ext_age_ms < 3000;
+  for (let i = 0; i < 14; i++) {
+    const v = s.temperatures_raw?.[i],
+      cell = document.querySelector('[data-value="t' + i + '"]');
+    const valid = (i < 10 ? fresh : ext) && Number.isFinite(v) && v !== 2500;
+    cell.textContent = valid ? (v / 10).toFixed(1) + ' °C' : '–';
+    cell.classList.toggle('value-stale', !valid);
+  }
+}
+function renderOutputs(s, fresh) {
+  const ext = flexVisible(s) && s.ext_age_ms >= 0 && s.ext_age_ms < 3000;
+  for (let i = 0; i < 15; i++) {
+    const raw = s.outputs_raw?.[i],
+      v = raw / (i >= 8 && i <= 10 ? 100 : 2),
+      cell = document.querySelector('[data-value="o' + i + '"]');
+    const valid = (i < 11 ? fresh : ext) && Number.isFinite(v) && v >= 0 && v <= 100;
+    cell.textContent = valid ? v.toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' %' : '–';
+    cell.classList.toggle('value-on', valid && v > 0);
+    cell.classList.toggle('value-stale', !valid);
+  }
+}
 async function livePoll() {
+  if (!automaticAllowed()) {
+    setTimeout(livePoll, 1000);
+    return;
+  }
   try {
-    const res = await fetch('/api/live', { cache: 'no-store', signal: AbortSignal.timeout(4000) });
-    if (!res.ok) throw new Error('Live-Daten nicht erreichbar');
-    liveState = await res.json();
+    liveState = await automaticRead('/api/live', 4000);
     applySettings(liveState.settings);
+    window.probusxSchema?.update(liveState, settings);
     const fresh = liveState.main_age_ms >= 0 && liveState.main_age_ms < 3000;
     $('live-state').textContent = fresh ? 'Empfang aktiv' : 'Warte auf Bus';
     $('transmit-toggle').textContent = liveState.tx_enabled
@@ -494,102 +793,39 @@ async function livePoll() {
       (t - lastTemperatures >= settings.temperature_ms || !lastTemperatures)
     ) {
       lastTemperatures = t;
-      $('live-values').textContent = fresh
-        ? liveState.temperatures_raw
-            .slice(0, 10)
-            .map((v, i) => 'S' + (i + 1) + ': ' + (v === 2500 ? '–' : (v / 10).toFixed(1) + ' °C'))
-            .join(' · ')
-        : 'Noch keine aktuellen Temperaturdaten';
-      const box = $('flex-modules');
-      box.replaceChildren();
-      for (const m of liveState.extensions || [
-        { slot: 1, supported: true, seen: liveState.ext_age_ms >= 0, age_ms: liveState.ext_age_ms },
-        { slot: 2, supported: false },
-        { slot: 3, supported: false },
-      ]) {
-        const row = document.createElement('div');
-        row.className = 'flex-slot';
-        row.textContent =
-          'FlexBox F' +
-          m.slot +
-          ': ' +
-          (!m.supported
-            ? 'vorbereitet · Buszuordnung noch nicht verifiziert'
-            : !m.seen
-              ? 'noch nicht empfangen'
-              : m.age_ms >= 3000
-                ? 'Empfang veraltet'
-                : liveState.temperatures_raw
-                    .slice(10, 14)
-                    .map(
-                      (v, i) =>
-                        'S' + (i + 1) + ' ' + (v === 2500 ? '–' : (v / 10).toFixed(1) + ' °C'),
-                    )
-                    .join(' · '));
-        box.append(row);
-      }
+      renderTemperatures(liveState, fresh);
     }
     if (activePage === 'live' && (t - lastOutputs >= settings.output_ms || !lastOutputs)) {
       lastOutputs = t;
-      const names = [
-        'R1',
-        'R2',
-        'R3',
-        'R4',
-        'R5',
-        'R6',
-        'R7',
-        'R0',
-        'HE1',
-        'HE2',
-        'HE3',
-        'F1R1',
-        'F1R2',
-        'F1R3',
-        'F1HE',
-      ];
-      let el = $('live-outputs');
-      if (!el) {
-        el = document.createElement('p');
-        el.id = 'live-outputs';
-        el.className = 'hint';
-        $('live-values').after(el);
-      }
-      el.textContent = (liveState.outputs_raw || [])
-        .map(
-          (v, i) =>
-            names[i] +
-            ': ' +
-            ((i < 11 ? fresh : liveState.ext_age_ms >= 0 && liveState.ext_age_ms < 3000)
-              ? (v / (i >= 8 && i <= 10 ? 100 : 2)).toFixed(0) + ' %'
-              : '–'),
-        )
-        .join(' · ');
+      renderOutputs(liveState, fresh);
     }
   } catch (e) {
-    $('live-state').textContent = 'Live-Verbindung unterbrochen';
-    for (const b of document.querySelectorAll('[data-key]')) b.disabled = true;
-    $('options-fields').disabled = true;
-    $('analysis-toggle').disabled = true;
+    if (!browserPaused) {
+      $('live-state').textContent = 'Live-Verbindung unterbrochen';
+      for (const b of document.querySelectorAll('[data-key]')) b.disabled = true;
+      $('options-fields').disabled = true;
+      $('analysis-toggle').disabled = true;
+    }
   }
 
   setTimeout(
     livePoll,
-    activePage === 'live' ? Math.min(1000, settings.temperature_ms, settings.output_ms) : 1000,
+    ['live', 'schema'].includes(activePage)
+      ? Math.min(1000, settings.temperature_ms, settings.output_ms)
+      : 1000,
   );
 }
 livePoll();
 async function displayPoll() {
+  if (!automaticAllowed()) {
+    setTimeout(displayPoll, 1000);
+    return;
+  }
   const began = performance.now();
   if (activePage === 'live' && !document.hidden) {
     const ctx = $('lcd').getContext('2d');
     try {
-      const response = await fetch('/api/display', {
-        cache: 'no-store',
-        signal: AbortSignal.timeout(2000),
-      });
-      if (!response.ok) throw new Error('Display nicht erreichbar');
-      const data = new Uint8Array(await response.arrayBuffer());
+      const data = new Uint8Array(await automaticRead('/api/display', 2000, true));
       if (data.length !== 5120) throw new Error('Unvollständiges Display');
       const im = ctx.createImageData(160, 128);
       for (let y = 0; y < 128; y++)
@@ -601,11 +837,13 @@ async function displayPoll() {
         }
       ctx.putImageData(im, 0, 0);
     } catch (e) {
-      ctx.fillStyle = '#eee';
-      ctx.fillRect(0, 0, 160, 128);
-      ctx.fillStyle = '#333';
-      ctx.font = '10px sans-serif';
-      ctx.fillText('Kein aktuelles Display', 20, 64);
+      if (!browserPaused) {
+        ctx.fillStyle = '#eee';
+        ctx.fillRect(0, 0, 160, 128);
+        ctx.fillStyle = '#333';
+        ctx.font = '10px sans-serif';
+        ctx.fillText('Kein aktuelles Display', 20, 64);
+      }
     }
   }
   setTimeout(displayPoll, Math.max(20, settings.display_ms - (performance.now() - began)));
@@ -801,6 +1039,10 @@ function renderDiagnosis(d) {
   $('quality-download').disabled = false;
 }
 async function pollDiagnosis() {
+  if (!automaticAllowed()) {
+    setTimeout(pollDiagnosis, 1000);
+    return;
+  }
   if (activePage !== 'analysis' || document.hidden || !settings.analysis_enabled) {
     if (!settings.analysis_enabled) {
       $('quality-state').textContent = 'Analyse ausgeschaltet';
@@ -819,12 +1061,7 @@ async function pollDiagnosis() {
   }
   const started = performance.now();
   try {
-    const response = await fetch('/api/diagnostics', {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(3500),
-    });
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const data = await response.json();
+    const data = await automaticRead('/api/diagnostics', 3500);
     diagRtt = performance.now() - started;
     if (diagLastUptime !== null && data.uptime_s < diagLastUptime) {
       diagBrowserEvents.push({ time: new Date().toISOString(), event: 'esp_reboot_detected' });
@@ -850,16 +1087,18 @@ async function pollDiagnosis() {
     });
     if (diagSamples.length > 300) diagSamples.shift();
   } catch (e) {
-    diagFailures++;
-    diagBrowserEvents.push({
-      time: new Date().toISOString(),
-      event: 'diagnostics_http_failed',
-      error: e.message,
-    });
-    $('quality-state').textContent = 'Browser-Verbindung zum ESP gestört';
-    $('quality-state').dataset.level = 'bad';
-    $('quality-network').textContent =
-      'Letzter Abruf fehlgeschlagen. Aus dieser Störung lässt sich kein Busfehler ableiten.';
+    if (!browserPaused) {
+      diagFailures++;
+      diagBrowserEvents.push({
+        time: new Date().toISOString(),
+        event: 'diagnostics_http_failed',
+        error: e.message,
+      });
+      $('quality-state').textContent = 'Browser-Verbindung zum ESP gestört';
+      $('quality-state').dataset.level = 'bad';
+      $('quality-network').textContent =
+        'Letzter Abruf fehlgeschlagen. Aus dieser Störung lässt sich kein Busfehler ableiten.';
+    }
   }
   if (diagBrowserEvents.length > 100) diagBrowserEvents.shift();
   setTimeout(pollDiagnosis, 2000);

@@ -1,0 +1,8 @@
+# Prüfumgebung für die native MQTT-Anbindung. Python 3.14 verwenden.
+homeassistant==2026.11.1
+paho-mqtt==2.1.0
+Pillow==13.0.0
+aiohasupervisor==0.8.1
+ha-ffmpeg==3.2.2
+numpy==2.5.4
+PyTurboJPEG==1.8.0

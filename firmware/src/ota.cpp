@@ -1,3 +1,4 @@
+#include "http_connections.h"
 #include "ota.h"
 #include "ota_transfer.h"
 #include <unistd.h>
@@ -93,6 +94,7 @@ static void upload_worker(void *) {
 }
 // Prüft Token, Dateityp, Größe und Gerätezustand vor Beginn des Updates.
 static esp_err_t upload_handler(httpd_req_t *req) {
+  http_connections::touch(req);
   char token[40], type[64];
   if (httpd_req_get_hdr_value_str(req, "X-CSRF-Token", token, sizeof(token)) != ESP_OK ||
       strcmp(token, csrf)) {
@@ -132,6 +134,7 @@ static esp_err_t upload_handler(httpd_req_t *req) {
   return ESP_OK;
 }
 static esp_err_t health_handler(httpd_req_t *req) {
+  http_connections::touch(req);
   return reply(req, "{\"health\":\"pbx-ota-v1\"}");
 }
 void ota_register(httpd_handle_t http, const char *token) {
@@ -150,6 +153,9 @@ void ota_register(httpd_handle_t http, const char *token) {
   ESP_ERROR_CHECK(httpd_register_uri_handler(server, &route));
   configASSERT(xTaskCreatePinnedToCore(upload_worker, "ota_upload", 10240, nullptr, 4, nullptr,
                                        0) == pdPASS);
+}
+bool ota_restart_allowed() {
+  return !pending && !updating;
 }
 void ota_add_status(cJSON *root) {
   auto *ota = cJSON_AddObjectToObject(root, "ota");

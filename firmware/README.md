@@ -3,6 +3,7 @@
 Diese Anwendung verwendet ESP-IDF und PlatformIO.
 Sie empfängt ProBusX, stellt die Weboberfläche bereit und beantwortet Tastenvorgänge.
 
+- [MQTT und Home Assistant](../docs/MQTT.md)
 - [Firmware bauen](../docs/Entwicklung.md)
 - [USB-Installation und WLAN](../docs/Installation.md)
 - [OTA und Bedienung](../docs/Bedienung.md)
@@ -12,3 +13,5 @@ Sie empfängt ProBusX, stellt die Weboberfläche bereit und beantwortet Tastenvo
 `src/web_assets.h` wird aus den HTML-, JavaScript- und CSS-Dateien erzeugt.
 `abbilder/` enthält nach einem Build die USB- und OTA-Dateien.
 Die OTA-Projektkennung bleibt aus Kompatibilitätsgründen `pbx_waveshare_ota_v1`.
+
+- [Lokale Diagramme und RAM-Verlauf](../docs/Verlauf.md)

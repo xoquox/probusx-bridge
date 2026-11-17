@@ -13,11 +13,19 @@ parts = [
 for name, symbol in [
     ("index.html", "index_start"),
     ("app.js", "js_start"),
+    ("schema.js", "schema_js_start"),
+    ("history.js", "history_js_start"),
     ("style.css", "css_start"),
 ]:
     data = (root / "src" / name).read_text(encoding="utf-8")
     assert ')PBXASSET"' not in data
     parts.append(f'inline constexpr char {symbol}[] = R"PBXASSET({data})PBXASSET";\n')
+# Binärdateien erhalten eine feste Länge. Kein strlen() für PNG oder ICO verwenden.
+for name, symbol in [("logo.png", "logo_data"), ("favicon.png", "favicon_png_data"),
+                     ("favicon.ico", "favicon_ico_data")]:
+    data = (root / "src/assets" / name).read_bytes()
+    content = ",".join(str(byte) for byte in data)
+    parts.append(f"inline constexpr unsigned char {symbol}[] = {{{content}}};\n")
 output = root / "src/web_assets.h"
 text = "".join(parts)
 if not output.exists() or output.read_text(encoding="utf-8") != text:

@@ -1,5 +1,9 @@
 # Lokale Schnittstellen
 
+## MQTT
+
+Die neue HA-Verbindung verwendet MQTT. Topics und Nachrichten stehen in der [MQTT-Dokumentation](MQTT.md).
+
 ## HTTP
 
 Die Bridge verwendet Port 80 und HTTP ohne TLS.
@@ -16,6 +20,7 @@ Die Zustandsdaten enthalten das Datenschema `1`.
 | POST | `/api/key` | Einen Tastenvorgang vormerken |
 | POST | `/api/transmit` | Tastensenden freigeben oder sperren |
 | POST | `/api/settings` | Alle fünf Anzeige- und Freigabeeinstellungen speichern |
+| POST | `/api/mqtt` | Broker und MQTT-Zugangsdaten dauerhaft speichern |
 | POST | `/api/wifi` | WLAN-Zugangsdaten speichern |
 | POST | `/api/scan` | WLAN-Suche starten |
 | POST | `/api/forget` | Gespeichertes WLAN vergessen |
@@ -38,6 +43,35 @@ Der Token verhindert keine Zugriffe durch einen berechtigten Leser des lokalen S
 Er ist kein Benutzerpasswort und ersetzt keine Netzwerkzugriffskontrolle.
 
 ## Messwerte
+
+### WLAN-Status ab Firmware 3.3.0
+
+`GET /api/status` ergänzt das Objekt `wifi` um diese Felder:
+
+| Feld | Inhalt |
+| --- | --- |
+| `ap_mode` | `auto` oder `fixed`; gespeicherte Wahl |
+| `selected_bssid` | Gespeichertes Ziel; bei automatischer Wahl leer |
+| `connected_bssid` | BSSID der aktuellen Verbindung; sonst leer |
+| `connected_channel` | Aktueller Kanal; ohne Verbindungsdaten `null` |
+| `connected_rssi` | Aktuelle Signalstärke in dBm; sonst `null` |
+| `networks[].bssid` | BSSID dieses Suchtreffers |
+| `networks[].channel` | Kanal dieses Suchtreffers |
+| `networks[].ssid` | WLAN-Name; bei verborgenem Namen leer |
+| `networks[].rssi` | Signalstärke dieses Suchtreffers in dBm |
+
+Die Suchliste wird nicht nach SSID zusammengefasst und nicht auf 32 Einträge gekürzt.
+Bei Speichermangel meldet die Bridge einen Fehler statt einer unvollständigen Liste.
+
+`POST /api/wifi` erwartet weiterhin `token`, `ssid` und `password`.
+Zusätzlich werden `ap_mode=auto|fixed` und `bssid` unterstützt.
+Bei `fixed` muss `bssid` eine gültige Unicast-MAC-Adresse enthalten.
+Bei `auto` wird die BSSID geleert.
+Fehlt `ap_mode`, gilt für ältere Clients die automatische Wahl.
+Eine ungültige Einstellung wird vor dem Speicherauftrag abgelehnt.
+Das API-Schema der HA-Messwerte bleibt bei `1`.
+
+### Busmesswerte
 
 `GET /api/live` liefert unter anderem:
 
@@ -157,3 +191,97 @@ Erlaubt sind 1000 bis 3600000 ms.
 `\n` bezeichnet ein tatsächliches LF-Zeichen.
 Danach sendet die Bridge den PBXS-Datenstrom.
 Der Befehl wird nicht auf den RS485-Bus geschrieben.
+
+## Manueller Neustart ab Firmware 3.3.1
+
+`POST /api/restart` erwartet Formulardaten mit `token` aus `/api/status`.
+Ein gültiger Aufruf antwortet mit HTTP 202 und `{"accepted":true}`.
+Der Neustart folgt nach etwa 1,2 Sekunden. Die Vorgangsreservierung bleibt bis dahin bestehen.
+Ein falsches Token ergibt HTTP 403. Ein laufender Vorgang oder die Startprüfung ergibt
+HTTP 409. Kann der Neustart nicht geplant werden, folgt HTTP 503.
+`/api/status` enthält das zusätzliche boolesche Feld `restart_pending`.
+Gespeicherte WLAN- und Laufzeiteinstellungen bleiben erhalten.
+
+## Heizungsschema ab Firmware 3.4.0
+
+| Methode und Pfad | Aufgabe |
+| --- | --- |
+| GET `/schema` | Schema-Seite öffnen |
+| GET `/api/schema` | Speicherstatus, Revisionen, Bildmaße und Anordnung lesen |
+| POST `/api/schema` | Anordnung mit erwarteter Revision speichern |
+| GET `/api/schema/image` | Gespeichertes PNG oder JPEG lesen |
+| POST `/api/schema/image` | Normalisiertes PNG oder JPEG speichern |
+
+Schreibende Aufrufe benötigen `X-CSRF-Token` aus `/api/status`. Der Layout-Upload
+verwendet `Content-Type: application/json`, der Bild-Upload `application/octet-stream`.
+Layout: `version` ist 1, `revision` ist die zuletzt gelesene Layoutrevision und `items`
+ist eine Liste mit höchstens 45 Einträgen. Jeder Eintrag enthält `id`, `x`, `y`,
+`visible` und `label`. X und Y sind Zahlen von 0 bis 100. IDs dürfen nicht doppelt sein.
+Das Layout darf höchstens 16.384 Byte groß sein. Das Bildlimit steht in `max_image_bytes`.
+
+Die Antwort auf erfolgreiches Speichern enthält `accepted: true` und die neue `revision`.
+GET `/api/schema` enthält außerdem `storage_ready`, `image_revision`, `image_width`,
+`image_height` und `items`. Die Bildrevision ist unabhängig von der Layoutrevision.
+HTTP 409 bezeichnet einen belegten Vorgang oder eine inzwischen geänderte Anordnung.
+HTTP 403 bezeichnet ein falsches Token. Ungültige Größe ergibt 413, falscher Inhaltstyp
+415 und ungültiger Inhalt 400. Bei fehlendem Schema-Speicher folgt 503.
+
+## Logo und Favicon ab Firmware 3.4.1
+
+| Pfad | Inhalt |
+| --- | --- |
+| GET `/logo.png` | PX-Seitenlogo, PNG mit 192 × 192 Pixeln |
+| GET `/favicon.png` | Favicon, PNG mit 32 × 32 Pixeln |
+| GET `/favicon.ico` | ICO mit 16, 32, 48 und 64 Pixeln |
+
+Die Binärdateien werden mit ihrer tatsächlichen Länge direkt aus der Firmware geliefert.
+Sie verwenden `Cache-Control: no-store` und `X-Content-Type-Options: nosniff`.
+Sie belegen keinen zusätzlichen Bereich für Benutzerdaten.
+
+### MQTT-Einstellungen über HTTP
+
+`/api/status.mqtt` liefert `enabled`, `connected`, `tls`, `host`, `port`, `username`,
+`password_set`, `root`, `message`, `connections`, `publish_errors` und `rejected_keys`.
+Es liefert weder das Passwort noch die MQTT-Verbindungskennung der Tasten.
+`POST /api/mqtt` erwartet `token`, `enabled=0|1`, `host`, `port`, `tls=0|1`,
+`username`, `password` und `clear_password=0|1` als Formulardaten.
+Ein leeres Passwort behält den bisherigen Wert. Die Löschoption hat Vorrang.
+Die Antwort bestätigt den angenommenen Auftrag. Der Hintergrundtask meldet das Speicherergebnis im Status.
+
+## Lokaler Verlauf ab Firmware 3.6.0
+
+| Methode | Pfad | Zweck |
+| --- | --- | --- |
+| GET | `/history` | Verlaufsseite |
+| GET | `/api/history/status` | Objekt `history` mit Kapazität, Belegung, Grenzen und Einstellungen |
+| GET | `/api/history/data?from=0&to=10000&limit=768` | Binäre Min/Max-Zeitkörbe |
+| POST | `/api/history/settings` | `token`, `enabled`, `interval_s`, `flex1`, `flex2=0`, `flex3=0` |
+
+`from` und `to` sind Millisekunden seit dem aktuellen Gerätestart. `from < to` ist erforderlich.
+`to` darf höchstens 60 Sekunden nach der aktuellen Gerätezeit liegen. `limit`: 16 bis 1024.
+Bei POST gilt `application/x-www-form-urlencoded`. Intervall: 1 bis 3600 Sekunden.
+Ein belegter Vorgang führt zu HTTP 409; ungültige Felder zu 400 und ein falsches Token zu 403.
+
+Das Binärformat ist Little Endian. Header: `PBH1`, Version uint32, Anzahl uint32,
+Schrittweite uint32 (256), `from` uint64, `to` uint64. Headergröße: 32 Byte.
+Danach folgen 256 Byte je Korb: erste/letzte Messzeit als uint64, dann vier Arrays mit
+je 29 int16 für Minimum, Maximum, ersten und letzten gültigen Wert. Es folgen uint32
+Lückenmaske und uint32 Messpunktzahl. Der ungültige Rohwert ist -32768.
+Kanalfolge: zehn Haupttemperaturen, vier F1-Temperaturen, acht R-Ausgänge (R1..R7,R0),
+drei HE-Ausgänge, vier F1-Ausgänge. Temperaturen durch 10 teilen; Haupt-HE durch 100;
+übrige Ausgänge durch 2. Siehe `history_store.h` und `history.js`.
+
+Statusfelder `removed_samples` und `dropped_events` zählen ersetzte Messpunkte bzw.
+verlorene Übergaben vom Empfang an den Verlauf. `capture_reserved` meldet den vorübergehenden
+Rohpuffer. `persistent` ist false. Weitere Erläuterungen stehen in [Verlauf](Verlauf.md).
+
+### Kompaktes Verlaufsformat ab Firmware 3.6.1
+
+Der Binärkopf verwendet Version 2. Die Schrittweite bleibt 256 Byte.
+`count` zählt jetzt die tatsächlich übertragenen belegten Zeitkörbe; null ist zulässig.
+Die Körbe sind chronologisch, aber nicht gleichmäßig verteilt. Ihre ersten und letzten
+Messzeiten bestimmen ihre Position auf der Zeitachse. Der Browser unterstützt beide Versionen.
+`limit` akzeptiert weiterhin 16 bis 1024; die Antwort wird auf höchstens 256 Körbe begrenzt.
+Der Datenhandler startet einen eigenen Leseauftrag und kehrt sofort zurück.
+Ein gleichzeitiger zweiter Leseauftrag erhält HTTP 429. Bei Speichermangel oder belegter
+Verlaufssperre antwortet der Hintergrundauftrag mit HTTP 503.

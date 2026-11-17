@@ -68,9 +68,10 @@ def main() -> int:
         "--nur-quellen", action="store_true", help="Ohne Firmwareabbilder verpacken"
     )
     args = parser.parse_args()
-    version = json.loads(
+    ha_version = json.loads(
         (ROOT / "home_assistant/custom_components/probusx/manifest.json").read_text()
     )["version"]
+    version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     dist = ROOT / "dist"
     dist.mkdir(exist_ok=True)
     binaries = ROOT / "firmware/abbilder"
@@ -97,10 +98,11 @@ def main() -> int:
         [
             (ROOT / "docs/Home-Assistant.md", "INSTALLATION.md"),
             (ROOT / "docs/Diagnose.md", "Diagnose.md"),
+            (ROOT / "docs/MQTT.md", "MQTT.md"),
             (ROOT / "LIZENZ.md", "LIZENZ.md"),
         ]
     )
-    path = dist / f"probusx-home-assistant-{version}.zip"
+    path = dist / f"probusx-home-assistant-legacy-{ha_version}.zip"
     archive(path, entries)
     paths.append(path)
     if not args.nur_quellen:

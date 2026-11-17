@@ -130,7 +130,8 @@ class RepositoryTests(unittest.TestCase):
             (ROOT / "home_assistant/custom_components/probusx/manifest.json").read_text()
         )
         self.assertEqual(manifest["version"], "0.3.1")
-        self.assertEqual((ROOT / "firmware/version.txt").read_text().strip(), "3.2.1")
+        self.assertEqual((ROOT / "firmware/version.txt").read_text().strip(), "3.6.1")
+        self.assertEqual((ROOT / "VERSION").read_text().strip(), "0.6.1")
         base = ROOT / "home_assistant/custom_components/probusx"
         self.assertEqual(
             json.loads((base / "strings.json").read_text()),

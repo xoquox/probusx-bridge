@@ -21,10 +21,11 @@ Ein Zähler für unbekannte Köpfe beweist daher keinen elektrischen Fehler.
 
 ## F1-Ausgänge
 
-Die erwarteten Positionen stehen im Protokoll.
-Ihre aktive Zuordnung ist noch nicht bestätigt.
-Ein gezielter Test mit eingeschalteten Ausgängen fehlt.
-Bis dahin bleiben die entsprechenden Attribute als vorläufig gekennzeichnet.
+F1R1 und F1R3 sind im Haupttelegramm bei 114 und 118 mit aktiven Werten geprüft.
+F1R2 bei 116 und F1HE bei 120 brauchen aktive Vergleichswerte.
+Für F1R3 fehlt noch eine gezielt aufgezeichnete Ein-/Aus-Umschaltung.
+Zwischenwerte und die HE-Skalierung brauchen weitere Nachweise.
+Die frühere Annahme, dass F0-Bytes 13 bis 20 die Istwerte enthalten, ist verworfen.
 
 ## Displayprüfung
 

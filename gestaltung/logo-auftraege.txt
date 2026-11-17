@@ -1,0 +1,18 @@
+Bildvorgaben in deutscher Dokumentation
+
+Erstentwurf:
+Ein kompaktes Logo für ProBusX Bridge, eine lokale ESP32-Schnittstelle für einen
+Heizungsregler. Ein kräftiges PX-Monogramm mit Bezug zu Datenwegen und Heizungsleitungen.
+Türkis wie die vorhandene Oberfläche, zunächst mit kupferfarbenen Leitungen als Akzent.
+Gerade Linien und 45-Grad-Abschrägungen. Ein einzelnes Symbol auf transparentem Hintergrund.
+Keine weiteren Wörter oder Präsentationsflächen.
+
+Freigegebene Änderung:
+Alle orange- und kupferfarbenen Leitungen vollständig entfernen. Nur das vorhandene
+türkise PX-Monogramm behalten. Form, Proportionen und Erscheinungsbild der Buchstaben
+erhalten. Außerhalb des PX und an den entfernten Leitungen einen transparenten
+Hintergrund verwenden. Keine weiteren Elemente, Wörter oder Umrandungen hinzufügen.
+
+Freigabe:
+Der Benutzer bestätigte diese PX-Fassung mit „So ist sehr gut“.
+Nur diese Fassung ist als Original und als Grundlage für die Webdateien enthalten.

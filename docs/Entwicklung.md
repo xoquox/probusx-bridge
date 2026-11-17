@@ -52,6 +52,7 @@ Alternativ kann `make_firmware.py --esptool PFAD` einen ausdrücklichen Pfad ver
 - `sdkconfig.defaults` enthält PSRAM, USB-Konsole und OTA-Rückfall.
 - `partitions.csv` definiert zwei OTA-Partitionen mit je 3 MiB.
 - `version.txt` enthält die Firmwareversion.
+- `../VERSION` enthält die Projektversion unabhängig von der HA-Integration.
 - `CMakeLists.txt` behält den Projektnamen `pbx_waveshare_ota_v1` bei.
 
 Die Projektkennung gehört zur OTA-Kompatibilitätsprüfung.
@@ -89,8 +90,9 @@ Ohne weitere Sprachdatei verwendet HA den Standardtext.
 
 ## Versionen ändern
 
-1. Die Firmwareversion in `firmware/version.txt` ändern.
-2. Die Integrationsversion in `manifest.json` ändern.
+1. Die Projektversion in `VERSION` ändern.
+2. Die Firmwareversion in `firmware/version.txt` ändern.
+3. Die Integrationsversion in `manifest.json` nur bei einer geänderten Integration ändern.
 3. Den Versionsabschnitt im README aktualisieren.
 4. Die Änderung in `AENDERUNGEN.md` beschreiben.
 5. Alle betroffenen Prüfungen ausführen.
@@ -102,7 +104,7 @@ Der Workflow **Prüfungen und Firmware** läuft bei Push und Pull Request.
 Er prüft Basistests, HA-Laufzeit, Browser und den Firmware-Build.
 Ein erfolgreicher Firmwarejob stellt die Abbilder als Build-Ergebnis bereit.
 
-Der Workflow **Veröffentlichung** wird durch einen Tag wie `v0.3.1` gestartet.
+Der Workflow **Veröffentlichung** wird durch einen Tag wie `v0.3.2` gestartet.
 Er führt dieselben Prüfungen aus und baut danach die Veröffentlichungspakete.
 Er lädt Quellpaket, HA-Paket, Firmware und Prüfsummen in eine GitHub-Veröffentlichung.
 Ein manuell gestarteter Build erstellt keine Veröffentlichung.
@@ -112,3 +114,19 @@ Ein manuell gestarteter Build erstellt keine Veröffentlichung.
 Python nutzt Black mit einer Zeilenlänge von 100 Zeichen.
 C++ nutzt die enthaltene `.clang-format`-Datei.
 Für Kommentare und Dokumentation gelten die [Schreibregeln](Schreibregeln.md).
+
+## Lokaler Verlauf
+
+Ab Firmware 3.6.0: Siehe [Verlauf](Verlauf.md) für Bedienung, Speicheraufteilung und Grenzen.
+
+## Vorhandenen Build nach Versionswechsel erneuern
+
+Nach einer Änderung von `firmware/version.txt` zuerst den Build bereinigen:
+
+```sh
+.venv/bin/python -m platformio run --project-dir firmware --target clean
+```
+
+Dann wie oben bauen und `verify_firmware.py` ausführen. Dadurch kann keine alte
+CMake-Anwendungsbeschreibung mit der vorherigen Version in das Paket gelangen.
+Unter Windows denselben Aufruf mit `.venv\Scripts\python.exe` ausführen.

@@ -23,7 +23,7 @@ def run(command: list[str], *, env: dict | None = None) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--browser", action="store_true", help="Zusätzlich beide Browserprüfungen ausführen"
+        "--browser", action="store_true", help="Zusätzlich alle Browserprüfungen ausführen"
     )
     parser.add_argument("--ha", action="store_true", help="Zusätzlich die echte HA-Laufzeit prüfen")
     parser.add_argument(
@@ -70,17 +70,24 @@ def main() -> int:
             run([exe, *map(str, arguments)])
 
         fixture = str(ROOT / "tests/fixtures/hauptwerte.bin")
+        native("tests/history_store_test.cpp")
+        native("tests/history_transfer_test.cpp")
+        native("firmware/tests/test_restart_policy.cpp")
+        native("firmware/tests/test_schema_store.cpp")
         native("tests/protocol_unit.cpp", fixture)
         native("tests/quality_test.cpp", fixture)
         native("tests/options_test.cpp", fixture)
+        native("tests/flex_values_test.cpp", fixture)
         if args.replay:
             native("tests/protocol_test.cpp", *[str(Path(p).resolve()) for p in args.replay])
         if args.timed:
             native("tests/timing_test.cpp", *[str(Path(p).resolve()) for p in args.timed])
 
     if args.browser:
+        run(["node", "firmware/tests/test_history_browser.cjs"])
         run(["node", "tests/test_panel.cjs"])
         run(["node", "firmware/tests/test_browser.cjs"])
+        run(["node", "firmware/tests/test_schema_browser.cjs"])
     if args.ha:
         run([sys.executable, "tests/test_ha_runtime.py"])
     print(

@@ -49,8 +49,8 @@ Unter **Actions** lassen sich Status und Build-Ergebnisse öffnen.
 Nach erfolgreichen Prüfungen einen Versionstag setzen:
 
 ```sh
-git tag v0.3.1
-git push origin v0.3.1
+git tag v0.4.1
+git push origin v0.4.1
 ```
 
 Der Veröffentlichungsworkflow prüft und baut diesen Quellstand erneut.

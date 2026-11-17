@@ -93,3 +93,27 @@ Eine einzelne Pixelverfälschung wird deshalb nicht sicher erkannt.
 CRC schützt gegen Übertragungsfehler und ist keine Absenderauthentifizierung.
 Die Zähler und Ereignisse liegen im RAM.
 Sie werden nicht laufend in den Flash geschrieben.
+
+## Weboberfläche nur noch von einem PC erreichbar
+
+Wenn bestehende Verbindungen noch funktionieren, neue Clients aber nicht mehr zugreifen
+können, können belegte HTTP-Sitzungen die Ursache sein. Ein erfolgreicher Neustart allein
+beweist diese Ursache nicht. Auch WLAN und Routing müssen bei Bedarf geprüft werden.
+
+Seit Firmware 3.3.1 gibt der HTTP-Server bei Platzmangel die am längsten unbenutzte
+freie Sitzung frei. Laufende asynchrone Aufnahme- und Update-Aufträge sind davon bis
+zu ihrem Abschluss ausgenommen. Die bisherige Grenze von sechs HTTP-Sitzungen bleibt.
+TCP-Keepalive prüft nach 30 Sekunden ohne TCP-Verkehr mit bis zu drei Proben im Abstand
+von fünf Sekunden, ob ein Peer noch antwortet. Das ist keine feste Zeitgrenze für eine
+bediente Webseite. Lesen und Schreiben haben weiterhin jeweils fünf Sekunden Zeitgrenze.
+Eine offene Webseite pausiert zusätzlich nach einer Stunde ohne Bedienung.
+
+Diese Maßnahmen verhindern belegte Sitzungen als dauerhafte Zugangssperre. Sie ersetzen
+keinen Test am echten Gerät. Bei erneutem Ausfall IP-Adressen, Fehlermeldung und Zeitpunkt
+notieren. Wenn möglich vor dem Neustart einen Diagnosebericht herunterladen.
+
+HTTP-Sitzungen ohne neuen Request werden nach 30 Sekunden geschlossen. Die Prüfung
+läuft alle fünf Sekunden im HTTP-Task. Während einer Vorgangsreservierung wird diese
+Bereinigung ausgesetzt. Dadurch bleiben laufende Aufnahmen und OTA-Aufträge geschützt.
+Nach deren Abschluss setzt die Bereinigung wieder ein. Home Assistant öffnet bei Bedarf
+automatisch eine neue HTTP-Verbindung. Seine Entitäten werden nicht durch die Browserpause angehalten.

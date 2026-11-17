@@ -91,7 +91,7 @@ Sonst: Rohwert = u
 | Hauptwerte R1 bis R7, R0 | 44, 46, 48, 50, 52, 54, 56, 58 | /2 % | Stellwerte zugeordnet |
 | Hauptwerte HE1 bis HE3 | 60, 62, 64 | /100 % | HE1 = 15 % verglichen; andere null |
 | F1S1 bis F1S4 | 5, 7, 9, 11 | /10 °C | Temperaturgruppe zugeordnet |
-| F1R1 bis F1R3, F1HE | 13, 15, 17, 19 | /2 % | Vorläufig; nur Nullwerte beobachtet |
+| F1R1 bis F1R3, F1HE im Haupttelegramm `36:61` | 114, 116, 118, 120 | /2 % | R1 und R3 mit aktiven Werten gegen Kurzstatus geprüft; R2 und HE bisher null |
 
 Vorzeichen und Skalierungen werden zusätzlich durch den ursprünglichen Conexio-Webcode gestützt.
 Negative Temperaturen kommen in den beiden Aufnahmen nicht vor.
@@ -164,3 +164,33 @@ Die Sondertastenzuordnung beruht auf Aufnahme, Menüwechsel und Betreiberangabe.
 
 Die vollständigen Aufnahmen sind nicht im Repository enthalten.
 Weitere Fragen stehen unter [Offene Punkte](Offene-Punkte.md).
+
+## Korrektur der F1-Ausgänge, Aufnahme vom 14.11.2026
+
+Der Rohstrom mit SHA-256 `0aff072b9f2b0e602e672478ac5c9fcb36065da055510b66a4cb8efabe40b6bc`
+enthält 120 Haupttelegramme, 240 F0-Telegramme und 240 Kurzstatusmeldungen vom Typ `70`.
+Die PBXS-Aufnahme ist vollständig und meldet keine UART- oder Aufnahmepufferverluste.
+1320 ProBusX-Telegramme tragen eine bekannte CRC. Alle bestehen die Prüfung.
+
+Im F0-Telegramm sind die Bytes 13 bis 20 in allen 240 Fällen null.
+Diese früher vermuteten Ausgangswörter sind keine bestätigte Istwertquelle.
+Die tatsächlichen Ausgangswerte werden aus den Hauptdaten gelesen:
+
+| Ausgang | Byte-Offsets, nullbasiert | Beispiel | Umrechnung | Gegenprobe |
+| --- | --- | --- | --- | --- |
+| F1R1 | 114–115 | `00 00` oder `00 C8` | /2 → 0 oder 100 % | Kurzstatus `70`, Byte 5; 4 aktive Haupttelegramme |
+| F1R2 | 116–117 | `00 00` | vorläufig /2 | Kurzstatus `70`, Byte 6; nur null beobachtet |
+| F1R3 | 118–119 | `00 C8` | /2 → 100 % | Kurzstatus `70`, Byte 7 = `64`; alle 120 Haupttelegramme |
+| F1HE | 120–121 | `00 00` | vorläufig /2 | Kurzstatus `70`, Byte 8; nur null beobachtet |
+
+Alle 120 Haupttelegramme stimmen in diesen vier Prozentwerten mit dem jeweils vorherigen Kurzstatus überein.
+F1R1 ist etwa bei Sekunde 24, 54, 85 und 115 kurz aktiv. Diese Wechsel erscheinen unabhängig in beiden Telegrammtypen.
+F1R3 bleibt in der gesamten Aufnahme aktiv. Ein echter Aus-Zustand von F1R3 wurde darin nicht aufgezeichnet.
+Die Skalierung bei Zwischenwerten und ein aktiver HE-Ausgang bleiben gezielt zu prüfen.
+Die Bedeutung der F0-Bytes 13 bis 23 wird mit dieser Korrektur nicht festgelegt.
+
+Die Firmware nutzt die bestätigte CRC der Hauptdaten, bevor sie F1-Ausgänge übernimmt.
+Ein nachfolgendes F0-Telegramm aktualisiert nur Temperaturen und überschreibt keine Ausgänge.
+Die gemeinsame F1-Verfügbarkeit verwendet den älteren Zeitstempel aus F0-Temperaturen und Hauptdaten-Ausgängen.
+Fällt eine Quelle aus, wird die F1-Gruppe nach drei Sekunden nicht verfügbar.
+Die API zeigt beide Einzelalter zusätzlich als `ext_temperatures_age_ms` und `ext_outputs_age_ms`.

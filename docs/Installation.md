@@ -1,5 +1,8 @@
 # Installation
 
+Ab Firmware 3.5.0 die [MQTT-Anbindung für Home Assistant](MQTT.md) einrichten.
+Die Weboberfläche bleibt für WLAN, Schema, direkte Bedienung und OTA erhalten.
+
 ## Voraussetzungen
 
 - Waveshare ESP32-S3-RS485-CAN / -U mit 16 MiB Flash und 8 MiB Octal-PSRAM.
@@ -84,7 +87,8 @@ Bei fehlender Berechtigung die Gruppen- oder udev-Regel des Systems anpassen.
 2. Das Passwort `probusx12345` eingeben.
 3. Im Browser `http://192.168.4.1` öffnen.
 4. Die Seite **Optionen** öffnen.
-5. Das eigene WLAN suchen oder dessen Namen eingeben.
+5. Zugangspunkte suchen oder den WLAN-Namen eingeben.
+   Bei fester Bindung den gewünschten Zugangspunkt anhand seiner BSSID auswählen.
 6. Das WLAN-Passwort eingeben.
 7. **WLAN speichern & verbinden** wählen.
 8. Die angezeigte IP-Adresse notieren.
@@ -97,6 +101,9 @@ Home Assistant kann dann dieselbe IP-Adresse weiterverwenden.
 Bei älterer Firmware heißt der Zugangspunkt noch `ProBusX-Sniffer`.
 Das neue OTA-Abbild übernimmt die gespeicherten Zugangsdaten.
 Ein bereits eingerichtetes Heim-WLAN muss daher nicht neu eingetragen werden.
+
+Die neue BSSID-Auswahl ist unter [WLAN](WLAN.md) beschrieben.
+Bestehende WLAN-Daten aus Version 3.2.x werden zunächst automatisch verwendet.
 
 ## Bus anschließen und prüfen
 

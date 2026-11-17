@@ -8,6 +8,5 @@
   "codeowners": [],
   "requirements": [],
   "dependencies": [],
-  "documentation": "https://github.com/xoquox/probusx-bridge#readme",
-  "issue_tracker": "https://github.com/xoquox/probusx-bridge/issues"
+  "documentation": "https://www.waveshare.com/wiki/ESP32-S3-RS485-CAN"
 }

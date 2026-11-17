@@ -1,6 +1,11 @@
 # Home Assistant einrichten
 
-## Integration installieren
+**Ab Firmware 3.5.0 die [MQTT-Anbindung](MQTT.md) verwenden.**
+Sie meldet alle 61 Entities ohne eigene HA-Komponente an.
+Die folgende Installation beschreibt den bisherigen HTTP-Betrieb.
+Für den Wechsel gelten die Schritte in der MQTT-Anleitung.
+
+## Bisherige HTTP-Integration installieren
 
 1. Den Ordner `home_assistant/custom_components/probusx` nach `/config/custom_components/probusx` kopieren.
 2. Prüfen, dass `/config/custom_components/probusx/manifest.json` vorhanden ist.
@@ -36,8 +41,8 @@ Die tatsächlichen IDs unter dem Gerät **ProBusX** prüfen.
 
 Ein Ausgangswert bezeichnet den gemeldeten Stellwert.
 Er bezeichnet keine gemessene Pumpendrehzahl.
-Die F1-Ausgangszuordnung trägt das Attribut `mapping: provisional_zero_only`.
-Sie muss noch mit eingeschalteten F1-Ausgängen geprüft werden.
+Für die MQTT-Anbindung sind F1R1 und F1R3 ab Firmware 3.5.2 mit aktiven Werten geprüft.
+F1R2 und F1HE bleiben vorläufig. Die alte HTTP-Komponente verwendet weiterhin ihr allgemeines vorläufiges Zuordnungsattribut.
 
 Rohwert `2500` ergibt bei Temperaturkanälen den Zustand **unbekannt**.
 Der Rohwert bleibt im Attribut `raw` erhalten.

@@ -14,7 +14,8 @@ const fs = require('fs'),
     if (route.request().url().includes('/api/camera_proxy/')) {
       images++;
       return route.fulfill({
-        contentType: 'image/png',
+        // Die native MQTT-Kamera von HA verwendet diesen MIME-Typ auch für PNG-Nutzdaten.
+        contentType: 'image/jpeg',
         body: fs.readFileSync(path.join(__dirname, 'display.png')),
       });
     }
@@ -52,6 +53,12 @@ const fs = require('fs'),
     };
   });
   await page.waitForTimeout(2300);
+  if (
+    !(await page
+      .locator('probusx-panel img')
+      .evaluate((img) => img.complete && img.naturalWidth === 160))
+  )
+    throw Error('PNG der MQTT-Kamera wird nicht angezeigt');
   if (images < 6 || images > 11) throw Error('Aktualisierung alle 250 ms erwartet: ' + images);
   await page.evaluate(() => {
     const p = document.querySelector('probusx-panel');

@@ -33,9 +33,9 @@ inline bool unquote(const std::string &in, std::string &out) {
   return true;
 }
 using Form = std::map<std::string, std::string>;
-inline bool form(const std::string &body, Form &out) {
+inline bool form(const std::string &body, Form &out, size_t max_bytes = 768) {
   out.clear();
-  if (body.empty() || body.size() > 768)
+  if (body.empty() || body.size() > max_bytes)
     return false;
   size_t start = 0;
   while (start < body.size()) {

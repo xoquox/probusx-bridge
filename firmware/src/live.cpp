@@ -1,5 +1,8 @@
+#include "history.h"
+#include "http_connections.h"
 #include "live.h"
 #include "protocol.h"
+#include "telemetry.h"
 #include "capture_api.h"
 #include "settings.h"
 #include "nvs.h"
@@ -148,19 +151,15 @@ void live_feed(const uint8_t *p, size_t n, bool transmit) {
         if (f[1] != 0x13)
           return;
         if (f[2] == 0x36 && f[4] == 0x61 && len == 241) {
-          for (int i = 0; i < 10; i++)
-            temperatures[i] = pbx::word(f + 10 + 2 * i);
-          for (int i = 0; i < 11; i++)
-            outputs[i] = pbx::word(f + 44 + 2 * i);
+          pbx::main_values(f, temperatures, outputs);
           main_at = t;
           ++main_count;
+          history_offer(t, main_at, pbx::flex1_at(ext_at, main_at), temperatures, outputs);
         } else if (f[2] == 0x40 && f[4] == 0xf0) {
-          for (int i = 0; i < 4; i++)
-            temperatures[10 + i] = pbx::word(f + 5 + 2 * i);
-          for (int i = 0; i < 4; i++)
-            outputs[11 + i] = pbx::word(f + 13 + 2 * i);
+          pbx::flex1_temperatures(f, temperatures);
           ext_at = t;
           ++ext_count;
+          history_offer(t, main_at, pbx::flex1_at(ext_at, main_at), temperatures, outputs);
         } else if (f[2] == 0x36 && f[4] == 0x55) {
           memcpy(display, f + 5, 5120);
           display_at = t;
@@ -222,6 +221,7 @@ static double age(uint64_t t, uint64_t stamp) {
   return stamp ? double(t - stamp) / 1000 : -1;
 }
 static esp_err_t state_handler(httpd_req_t *r) {
+  http_connections::touch(r);
   cJSON *o = cJSON_CreateObject();
   {
     Lock lock;
@@ -235,7 +235,10 @@ static esp_err_t state_handler(httpd_req_t *r) {
     cJSON_AddBoolToObject(o, "busy", operation_busy());
     cJSON_AddBoolToObject(o, "key_pending", keys.busy());
     cJSON_AddNumberToObject(o, "main_age_ms", age(t, main_at));
-    cJSON_AddNumberToObject(o, "ext_age_ms", age(t, ext_at));
+    cJSON_AddNumberToObject(o, "ext_age_ms", age(t, history_flex1_enabled()?pbx::flex1_at(ext_at, main_at):0));
+    cJSON_AddNumberToObject(o, "ext_temperatures_age_ms", age(t, ext_at));
+    cJSON_AddNumberToObject(o, "ext_outputs_age_ms", age(t, main_at));
+    cJSON_AddBoolToObject(o, "flex1_enabled", history_flex1_enabled());
     cJSON_AddNumberToObject(o, "display_age_ms", age(t, display_at));
     cJSON_AddNumberToObject(o, "poll_age_ms", age(t, poll_at));
     cJSON_AddNumberToObject(o, "main_frames", main_count);
@@ -281,11 +284,12 @@ static esp_err_t state_handler(httpd_req_t *r) {
       auto *m = cJSON_CreateObject();
       cJSON_AddNumberToObject(m, "slot", slot);
       cJSON_AddBoolToObject(m, "supported", slot == 1);
+      cJSON_AddBoolToObject(m, "enabled", slot == 1 && history_flex1_enabled());
       cJSON_AddBoolToObject(m, "seen", slot == 1 && ext_at);
-      cJSON_AddNumberToObject(m, "age_ms", slot == 1 ? age(t, ext_at) : -1);
+      cJSON_AddNumberToObject(m, "age_ms", slot == 1 ? age(t, pbx::flex1_at(ext_at, main_at)) : -1);
       cJSON_AddNumberToObject(m, "frames", slot == 1 ? ext_count : 0);
       cJSON_AddStringToObject(m, "mapping",
-                              slot == 1 ? "capture_verified_temperatures_outputs_provisional"
+                              slot == 1 ? "temperatures_r1_r3_observed_r2_he_provisional"
                                         : "not_verified");
       cJSON_AddItemToArray(modules, m);
     }
@@ -294,6 +298,7 @@ static esp_err_t state_handler(httpd_req_t *r) {
 }
 // Kopiert ein frisches Bild unter der Sperre. Die HTTP-Übertragung läuft danach ohne Sperre.
 static esp_err_t display_handler(httpd_req_t *r) {
+  http_connections::touch(r);
   auto *copy = new (std::nothrow) uint8_t[5120];
   if (!copy)
     return fail(r, "Speicher knapp");
@@ -315,6 +320,7 @@ static esp_err_t display_handler(httpd_req_t *r) {
 }
 // Erstellt einen kurzen Schnappschuss unter der Sperre. JSON wird außerhalb der Sperre aufgebaut.
 static esp_err_t diagnostics_handler(httpd_req_t *r) {
+  http_connections::touch(r);
   auto *snapshot = new (std::nothrow) pbx::Quality;
   if (!snapshot)
     return fail(r, "Speicher knapp", "503 Service Unavailable");
@@ -481,6 +487,7 @@ static const char *change_options(const char *path, web_logic::Form &f) {
 }
 // Prüft Format und Sitzungstoken. HTTP-Erfolg bestätigt nur die Annahme des Auftrags.
 static esp_err_t command_handler(httpd_req_t *r) {
+  http_connections::touch(r);
   if (r->content_len < 1 || r->content_len > 256)
     return fail(r, "Ungültige Anfrage", "400 Bad Request");
   char type[80]{};
@@ -501,28 +508,8 @@ static esp_err_t command_handler(httpd_req_t *r) {
   const char *failure;
   if (!strcmp(r->uri, "/api/transmit") || !strcmp(r->uri, "/api/settings"))
     failure = change_options(r->uri, f);
-  else {
-    Lock lock;
-    failure = [&]() -> const char * {
-      if (!enabled)
-        return "Senden ist nicht freigegeben";
-      if (!poll_at || now() - poll_at > 2000000)
-        return "Keine aktuellen Regler-Abfragen";
-      const char *names[] = {"up", "right", "down", "left", "special"};
-      uint8_t codes[] = {0x10, 0x20, 0x40, 0x80, 0x70}, key = 0;
-      for (int i = 0; i < 5; i++)
-        if (f["key"] == names[i])
-          key = codes[i];
-      if (!key)
-        return "Unbekannte Taste";
-      if (keys.busy() || !operation_take())
-        return "Vorgang läuft";
-      reserved = true;
-      key_queued_at = now();
-      keys.queue(key, key_queued_at);
-      return nullptr;
-    }();
-  }
+  else
+    failure = live_queue_key(f["key"].c_str());
   if (failure)
     return fail(r, failure);
   cJSON *o = cJSON_CreateObject();
@@ -546,4 +533,54 @@ void live_register(httpd_handle_t s, const char *csrf) {
                                                 : command_handler;
     ESP_ERROR_CHECK(httpd_register_uri_handler(s, &u));
   }
+}
+
+void live_snapshot(LiveSnapshot &s) {
+  Lock lock;
+  s.now_us = now();
+  s.main_at = main_at;
+  s.ext_at = history_flex1_enabled()?pbx::flex1_at(ext_at, main_at):0;
+  s.display_at = display_at;
+  s.poll_at = poll_at;
+  s.main_count = main_count;
+  s.ext_count = ext_count;
+  s.display_count = display_count;
+  s.tx_count = tx_count;
+  memcpy(s.temperatures, temperatures, sizeof(temperatures));
+  memcpy(s.outputs, outputs, sizeof(outputs));
+  memcpy(s.display, display, sizeof(display));
+  s.options = options;
+  s.enabled = enabled;
+  s.busy = operation_busy();
+  s.pending = keys.busy();
+  const auto &q = parser.quality;
+  s.analysis = q.enabled;
+  s.crc_ok = q.crc_ok;
+  s.crc_bad = q.crc_bad;
+  s.uart_errors = 0;
+  for (int i = 0; i < 5; ++i)
+    s.uart_errors += q.uart[i];
+  s.tx_errors = q.tx_errors;
+  s.key_expired = q.key_expired;
+}
+const char *live_queue_key(const char *name) {
+  Lock lock;
+  if (!enabled)
+    return "Senden ist nicht freigegeben";
+  if (!poll_at || now() - poll_at >= 2000000)
+    return "Keine aktuellen Regler-Abfragen";
+  const char *names[] = {"up", "right", "down", "left", "special"};
+  const uint8_t codes[] = {0x10, 0x20, 0x40, 0x80, 0x70};
+  uint8_t key = 0;
+  for (int i = 0; i < 5; ++i)
+    if (!strcmp(name, names[i]))
+      key = codes[i];
+  if (!key)
+    return "Unbekannte Taste";
+  if (keys.busy() || !operation_take())
+    return "Vorgang läuft";
+  reserved = true;
+  key_queued_at = now();
+  keys.queue(key, key_queued_at);
+  return nullptr;
 }

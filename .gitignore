@@ -27,3 +27,17 @@ tasten*.bin
 Thumbs.db
 .vscode/
 .idea/
+.agents/
+.codex/
+.aws/
+.ssh/
+.gnupg/
+*.pem
+*.key
+*.p12
+*.pfx
+*.zip
+*.raw
+!tests/display.raw
+*.bin
+!tests/fixtures/hauptwerte.bin

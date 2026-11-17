@@ -111,6 +111,10 @@ Beim erneuten Einschalten beginnen die Analysezähler neu.
 
 ## WLAN-Ausfall
 
+Die [Zugangspunktwahl](WLAN.md) kann automatisch oder fest per BSSID erfolgen.
+Bei fester Bindung gibt es keinen Wechsel zu einem anderen Zugangspunkt.
+Die Liste zeigt gleiche SSIDs einzeln mit BSSID, Kanal und Signalstärke.
+
 Die Bridge aktiviert bei fehlender IP-Verbindung den Ersatzzugangspunkt.
 Sein Name lautet `ProBusX-Bridge`.
 Die Adresse lautet `http://192.168.4.1`.
@@ -120,3 +124,42 @@ Die Oberfläche verwendet HTTP und einen Sitzungstoken.
 Sie besitzt keine Benutzerkonten oder TLS-Verschlüsselung.
 Den Zugriff auf das vertrauenswürdige lokale Netzwerk begrenzen.
 Für Fernzugriff die vorhandene Home-Assistant-Verbindung verwenden.
+
+## Anzeige nach einer Stunde pausieren
+
+Die Webseite zählt nur Bedienung als Aktivität. Dazu gehören Klicks, Mausbewegungen,
+Tastatureingaben und Scrollen. Automatische Abrufe verlängern die Frist nicht.
+Nach einer Stunde ohne Bedienung pausieren Status, Messwerte, Display und Diagnose.
+Ein Hinweis erscheint. Ein Klick auf „Anzeige fortsetzen“ oder eine andere Bedienung
+setzt die Abrufe fort. Veraltete Anzeigen während der Pause sind keine aktuellen Messwerte.
+Die Pause gilt je Browserseite. Sie ändert keine Einstellung im Gerät.
+
+Eine laufende Aufnahme oder ein Firmware-Update wird nicht durch diese Pause beendet.
+Nach Abschluss der Aktion kann die Pause einsetzen. Der Bus-Empfang und Home Assistant
+laufen unabhängig von der Webseite weiter.
+
+## Bridge neu starten
+
+Unter Optionen auf „Bridge neu starten“ klicken und die Rückfrage bestätigen.
+Die Bridge sendet zuerst eine Antwort und startet nach etwa einer Sekunde neu.
+Die Seite wartet auf einen neuen Starttoken. Danach meldet sie den erfolgreichen Neustart.
+Alle gespeicherten Einstellungen bleiben erhalten. Nicht gespeicherte Eingaben gehen verloren.
+
+Während Aufnahme, WLAN-Aktion, Tastenvorgang, Firmware-Update oder Startprüfung wird
+kein Neustart angenommen. Die API prüft diese Sperre auch ohne den Browser.
+
+## Eigenes Heizungsschema
+
+Die Seite Heizungsschema ergänzt ein gespeichertes Hintergrundbild mit verschiebbaren
+Sensor- und Ausgangswerten. Die Schritte stehen unter [Heizungsschema](Heizungsschema.md).
+
+## Erscheinungsbild ab Firmware 3.4.1
+
+Das PX-Logo steht im Seitenkopf und als Favicon im Browser. Die Oberfläche verwendet
+45-Grad-Abschrägungen. Das ändert die Bedienung nicht. Werte im Heizungsschema lassen
+sich weiterhin nur im Bearbeitungsmodus verschieben, benennen und ein-/ausblenden.
+Nach dem Firmware-Update alle offenen Bridge-Seiten mit Strg+F5 neu laden.
+
+## Lokaler Verlauf
+
+Ab Firmware 3.6.0: Siehe [Verlauf](Verlauf.md) für Bedienung, Speicheraufteilung und Grenzen.

@@ -1,20 +1,30 @@
+#include "history.h"
+#include "mqtt_bridge.h"
+#include "http_connections.h"
 #include "capture_api.h"
+#include "schema.h"
 #include "live.h"
 #include "ota.h"
 #include "esp_app_desc.h"
 #include "settings.h"
+#include "restart_policy.h"
 #include "web_logic.h"
+#include "wifi_policy.h"
 #include "web_assets.h"
 #include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <memory>
+#include <new>
+#include <utility>
 #include "cJSON.h"
 #include "esp_event.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_random.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "nvs.h"
@@ -32,11 +42,9 @@ static std::atomic<unsigned> disconnect_reason{0};
 static SemaphoreHandle_t model_mutex;
 static QueueHandle_t wifi_commands, downloads;
 static char token[33];
-struct StoredWifi {
-  uint32_t version;
-  char ssid[33];
-  char password[65];
-};
+static esp_timer_handle_t restart_timer;
+static std::atomic<bool> restart_pending{false};
+using StoredWifi = wifi_policy::StoredWifi;
 struct Command {
   enum Kind { SAVE, FORGET, SCAN } kind;
   StoredWifi wifi;
@@ -47,11 +55,19 @@ struct WifiModel {
   bool connected = false, ap = true, scanning = false;
   unsigned ap_seconds = 0, ap_clients = 0, reason = 0;
   uint16_t found = 0;
+  bool fixed = false;
+  char selected_bssid[18]{}, connected_bssid[18]{};
+  int connected_rssi = 0;
+  uint8_t connected_channel = 0;
   struct Network {
     char ssid[33];
+    char bssid[18];
+    uint8_t channel;
     int rssi;
     bool open;
-  } networks[32]{};
+  };
+  // Die vollständige Suchliste liegt im Heap. Keine Kürzung und keine Zusammenfassung nach SSID.
+  std::unique_ptr<Network[]> networks;
 };
 static WifiModel model;
 struct Download {
@@ -108,12 +124,16 @@ static StoredWifi load_wifi() {
   StoredWifi wifi{};
   nvs_handle_t handle;
   if (nvs_open("pbx_wifi", NVS_READONLY, &handle) == ESP_OK) {
-    size_t size = sizeof(wifi);
-    const esp_err_t err = nvs_get_blob(handle, "credentials", &wifi, &size);
+    size_t size = 0;
+    esp_err_t err = nvs_get_blob(handle, "credentials", nullptr, &size);
+    uint8_t bytes[sizeof(StoredWifi)]{};
+    if (err == ESP_OK && (size == sizeof(StoredWifi) || size == sizeof(wifi_policy::LegacyWifi)))
+      err = nvs_get_blob(handle, "credentials", bytes, &size);
+    else
+      err = ESP_FAIL;
     nvs_close(handle);
-    if (err != ESP_OK || size != sizeof(wifi) || wifi.version != 1 || wifi.ssid[32] ||
-        wifi.password[64] || !web_logic::credentials(wifi.ssid, wifi.password))
-      wifi = {};
+    if (err == ESP_OK)
+      wifi_policy::decode(bytes, size, wifi);
   }
   return wifi;
 }
@@ -121,10 +141,64 @@ static esp_err_t configure_sta(const StoredWifi &wifi) {
   wifi_config_t config{};
   memcpy(config.sta.ssid, wifi.ssid, strlen(wifi.ssid));
   memcpy(config.sta.password, wifi.password, strlen(wifi.password));
+  wifi_policy::apply_binding(config.sta, wifi);
+  config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+  config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
   config.sta.threshold.authmode = wifi.password[0] ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN;
   config.sta.pmf_cfg.capable = true;
   config.sta.pmf_cfg.required = false;
   return esp_wifi_set_config(WIFI_IF_STA, &config);
+}
+// Nur unter model_mutex aufrufen. Das Ziel ist von der gerade bestehenden Verbindung getrennt.
+static void model_binding(const StoredWifi &wifi) {
+  model.fixed = wifi.mode == wifi_policy::FIXED;
+  model.selected_bssid[0] = 0;
+  if (model.fixed)
+    wifi_policy::format_bssid(wifi.bssid, model.selected_bssid);
+}
+static void scan_networks() {
+  wifi_scan_config_t scan{};
+  scan.show_hidden = true;
+  esp_err_t err = esp_wifi_scan_start(&scan, true);
+  uint16_t count = 0;
+  if (err == ESP_OK)
+    err = esp_wifi_scan_get_ap_num(&count);
+  std::unique_ptr<wifi_ap_record_t[]> records;
+  std::unique_ptr<WifiModel::Network[]> networks;
+  if (err == ESP_OK && count) {
+    records.reset(new (std::nothrow) wifi_ap_record_t[count]{});
+    networks.reset(new (std::nothrow) WifiModel::Network[count]{});
+    if (!records || !networks)
+      err = ESP_ERR_NO_MEM;
+    else
+      err = esp_wifi_scan_get_ap_records(&count, records.get());
+  }
+  // Auch bei Speicher- oder Scanfehlern die internen Scanergebnisse freigeben.
+  esp_wifi_clear_ap_list();
+  if (err == ESP_OK)
+    for (unsigned i = 0; i < count; ++i) {
+      auto &entry = networks[i];
+      memcpy(entry.ssid, records[i].ssid, 32);
+      entry.ssid[32] = 0;
+      wifi_policy::format_bssid(records[i].bssid, entry.bssid);
+      entry.channel = records[i].primary;
+      entry.rssi = records[i].rssi;
+      entry.open = records[i].authmode == WIFI_AUTH_OPEN;
+    }
+  xSemaphoreTake(model_mutex, portMAX_DELAY);
+  model.found = err == ESP_OK ? count : 0;
+  if (err != ESP_OK)
+    networks.reset();
+  model.networks = std::move(networks);
+  model.scanning = false;
+  strlcpy(model.message,
+          err == ESP_OK ? "Zugangspunktsuche abgeschlossen."
+          : err == ESP_ERR_NO_MEM
+              ? "Zu wenig Speicher für die vollständige Suchliste. Bitte erneut suchen."
+              : "Zugangspunktsuche fehlgeschlagen. WLAN-Name und BSSID können direkt eingegeben "
+                "werden.",
+          sizeof(model.message));
+  xSemaphoreGive(model_mutex);
 }
 // Verarbeitet WLAN-Aufträge außerhalb des HTTP-Tasks.
 // Die Vorgangsreservierung verhindert Funkwechsel während Aufnahme, Tastenvorgang oder Update.
@@ -134,6 +208,7 @@ static void wifi_manager(void *) {
     configure_sta(saved);
   xSemaphoreTake(model_mutex, portMAX_DELAY);
   strlcpy(model.ssid, saved.ssid, sizeof(model.ssid));
+  model_binding(saved);
   xSemaphoreGive(model_mutex);
   bool previous = false, ap = true;
   uint64_t state_since = milliseconds(), next_attempt = 0, attempt_since = 0;
@@ -148,34 +223,7 @@ static void wifi_manager(void *) {
           esp_wifi_disconnect();
           linked = false;
         }
-        wifi_scan_config_t scan{};
-        scan.show_hidden = false;
-        const esp_err_t err = esp_wifi_scan_start(&scan, true);
-        wifi_ap_record_t records[32]{};
-        uint16_t count = 32;
-        esp_err_t results = err;
-        if (err == ESP_OK)
-          results = esp_wifi_scan_get_ap_records(&count, records);
-        xSemaphoreTake(model_mutex, portMAX_DELAY);
-        model.found = 0;
-        if (results == ESP_OK) {
-          for (unsigned i = 0; i < count; ++i) {
-            if (!records[i].ssid[0])
-              continue;
-            auto &n = model.networks[model.found++];
-            memcpy(n.ssid, records[i].ssid, 32);
-            n.ssid[32] = 0;
-            n.rssi = records[i].rssi;
-            n.open = records[i].authmode == WIFI_AUTH_OPEN;
-          }
-        }
-        model.scanning = false;
-        strlcpy(model.message,
-                results == ESP_OK
-                    ? "Netzwerksuche abgeschlossen."
-                    : "Netzwerksuche fehlgeschlagen. SSID kann direkt eingegeben werden.",
-                sizeof(model.message));
-        xSemaphoreGive(model_mutex);
+        scan_networks();
         next_attempt = milliseconds() + 3000;
       } else {
         const bool forget = command.kind == Command::FORGET;
@@ -194,6 +242,7 @@ static void wifi_manager(void *) {
           next_attempt = milliseconds() + 1000;
           xSemaphoreTake(model_mutex, portMAX_DELAY);
           strlcpy(model.ssid, saved.ssid, sizeof(model.ssid));
+          model_binding(saved);
           strlcpy(
               model.message,
               configured != ESP_OK
@@ -246,11 +295,21 @@ static void wifi_manager(void *) {
     }
     esp_netif_ip_info_t ip{};
     esp_netif_get_ip_info(sta_netif, &ip);
+    wifi_ap_record_t current_ap{};
+    const bool ap_info = connected && esp_wifi_sta_get_ap_info(&current_ap) == ESP_OK;
     xSemaphoreTake(model_mutex, portMAX_DELAY);
     model.connected = connected;
     model.ap = ap;
     model.ap_clients = clients.num;
     model.reason = disconnect_reason;
+    model.connected_bssid[0] = 0;
+    model.connected_rssi = 0;
+    model.connected_channel = 0;
+    if (ap_info) {
+      wifi_policy::format_bssid(current_ap.bssid, model.connected_bssid);
+      model.connected_rssi = current_ap.rssi;
+      model.connected_channel = current_ap.primary;
+    }
     model.ap_seconds = (connected && ap && now - state_since < 60000)
                            ? (60000 - (now - state_since) + 999) / 1000
                            : 0;
@@ -315,12 +374,16 @@ static bool receive_form(httpd_req_t *req, web_logic::Form &form) {
   return true;
 }
 static esp_err_t status_handler(httpd_req_t *req) {
+  http_connections::touch(req);
   char capture[1280];
   capture_status(capture, sizeof(capture));
   cJSON *root = cJSON_CreateObject();
   cJSON_AddStringToObject(root, "version", esp_app_get_description()->version);
   cJSON_AddStringToObject(root, "token", token);
   ota_add_status(root);
+  mqtt_bridge_status(root);
+  history_status(root);
+  cJSON_AddBoolToObject(root, "restart_pending", restart_pending);
   cJSON_AddItemToObject(root, "capture", cJSON_Parse(capture));
   cJSON *wifi = cJSON_AddObjectToObject(root, "wifi");
   xSemaphoreTake(model_mutex, portMAX_DELAY);
@@ -330,6 +393,16 @@ static esp_err_t status_handler(httpd_req_t *req) {
   cJSON_AddBoolToObject(wifi, "connected", model.connected);
   cJSON_AddBoolToObject(wifi, "ap", model.ap);
   cJSON_AddBoolToObject(wifi, "scanning", model.scanning);
+  cJSON_AddStringToObject(wifi, "ap_mode", model.fixed ? "fixed" : "auto");
+  cJSON_AddStringToObject(wifi, "selected_bssid", model.selected_bssid);
+  cJSON_AddStringToObject(wifi, "connected_bssid", model.connected_bssid);
+  if (model.connected_bssid[0]) {
+    cJSON_AddNumberToObject(wifi, "connected_rssi", model.connected_rssi);
+    cJSON_AddNumberToObject(wifi, "connected_channel", model.connected_channel);
+  } else {
+    cJSON_AddNullToObject(wifi, "connected_rssi");
+    cJSON_AddNullToObject(wifi, "connected_channel");
+  }
   cJSON_AddNumberToObject(wifi, "ap_seconds", model.ap_seconds);
   cJSON_AddNumberToObject(wifi, "ap_clients", model.ap_clients);
   cJSON_AddNumberToObject(wifi, "disconnect_reason", model.reason);
@@ -337,6 +410,8 @@ static esp_err_t status_handler(httpd_req_t *req) {
   for (unsigned i = 0; i < model.found; ++i) {
     cJSON *network = cJSON_CreateObject();
     cJSON_AddStringToObject(network, "ssid", model.networks[i].ssid);
+    cJSON_AddStringToObject(network, "bssid", model.networks[i].bssid);
+    cJSON_AddNumberToObject(network, "channel", model.networks[i].channel);
     cJSON_AddNumberToObject(network, "rssi", model.networks[i].rssi);
     cJSON_AddBoolToObject(network, "open", model.networks[i].open);
     cJSON_AddItemToArray(networks, network);
@@ -345,6 +420,7 @@ static esp_err_t status_handler(httpd_req_t *req) {
   return json_response(req, root);
 }
 static esp_err_t wifi_handler(httpd_req_t *req) {
+  http_connections::touch(req);
   web_logic::Form form;
   if (!receive_form(req, form))
     return ESP_FAIL;
@@ -355,12 +431,9 @@ static esp_err_t wifi_handler(httpd_req_t *req) {
     command.kind = Command::FORGET;
   else {
     command.kind = Command::SAVE;
-    if (!web_logic::credentials(form["ssid"], form["password"]))
-      return error_response(req, "SSID: 1–32 UTF-8-Bytes. Passwort: 8–63 Zeichen, 64 Hexziffern "
-                                 "oder leer für ein offenes WLAN.");
-    command.wifi.version = 1;
-    strlcpy(command.wifi.ssid, form["ssid"].c_str(), sizeof(command.wifi.ssid));
-    strlcpy(command.wifi.password, form["password"].c_str(), sizeof(command.wifi.password));
+    if (!wifi_policy::from_form(form, command.wifi))
+      return error_response(req, "WLAN-Einstellung ungültig. SSID und Passwort prüfen. Bei fester "
+                                 "Wahl eine gültige BSSID im Format AA:BB:CC:DD:EE:FF angeben.");
   }
   if (!operation_take())
     return error_response(req, "Aufnahme, Update oder WLAN-Aktion läuft bereits.", "409 Conflict");
@@ -412,6 +485,7 @@ static void download_worker(void *) {
   }
 }
 static esp_err_t download_handler(httpd_req_t *req) {
+  http_connections::touch(req);
   web_logic::Form form;
   if (!receive_form(req, form))
     return ESP_FAIL;
@@ -435,6 +509,7 @@ static esp_err_t download_handler(httpd_req_t *req) {
   return ESP_OK;
 }
 static esp_err_t stop_handler(httpd_req_t *req) {
+  http_connections::touch(req);
   web_logic::Form form;
   if (!receive_form(req, form))
     return ESP_FAIL;
@@ -443,10 +518,66 @@ static esp_err_t stop_handler(httpd_req_t *req) {
   cJSON_AddBoolToObject(json, "accepted", true);
   return json_response(req, json);
 }
+// Neustart mit kurzer Frist einplanen. Auch bei Verbindungsabbruch neu starten.
+// Die Reservierung bleibt bis zum Neustart bestehen.
+static void restart_now(void *) {
+  esp_restart();
+}
+static esp_err_t restart_handler(httpd_req_t *req) {
+  http_connections::touch(req);
+  web_logic::Form form;
+  if (!receive_form(req, form))
+    return ESP_FAIL;
+  struct Backend {
+    bool ready() { return ota_restart_allowed(); }
+    bool take() { return operation_take(); }
+    void pending(bool value) { restart_pending = value; }
+    bool schedule() { return esp_timer_start_once(restart_timer, 1200000) == ESP_OK; }
+    void release() { operation_give(); }
+  } backend;
+  const auto result = restart_policy::request(backend);
+  if (result == restart_policy::Result::BUSY)
+    return error_response(req, "Aufnahme, Startprüfung, Update oder andere Aktion läuft bereits.",
+                          "409 Conflict");
+  if (result == restart_policy::Result::TIMER_FAILED)
+    return error_response(req, "Neustart konnte nicht gestartet werden.",
+                          "503 Service Unavailable");
+  cJSON *json = cJSON_CreateObject();
+  cJSON_AddBoolToObject(json, "accepted", true);
+  return json_response(req, json, "202 Accepted");
+}
+// Bilddateien direkt aus dem Firmware-Flash liefern. Keine zusätzlichen Heapkopien.
+static esp_err_t branding_handler(httpd_req_t *req) {
+  http_connections::touch(req);
+  const unsigned char *data = logo_data;
+  size_t size = sizeof(logo_data);
+  const char *type = "image/png";
+  if (!strcmp(req->uri, "/favicon.png")) {
+    data = favicon_png_data;
+    size = sizeof(favicon_png_data);
+  } else if (!strcmp(req->uri, "/favicon.ico")) {
+    data = favicon_ico_data;
+    size = sizeof(favicon_ico_data);
+    type = "image/x-icon";
+  }
+  httpd_resp_set_type(req, type);
+  httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+  httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
+  return httpd_resp_send(req, reinterpret_cast<const char *>(data), size);
+}
 static esp_err_t asset_handler(httpd_req_t *req) {
+  http_connections::touch(req);
   const char *data = index_start, *type = "text/html; charset=utf-8";
   if (!strcmp(req->uri, "/app.js")) {
     data = js_start;
+    type = "text/javascript; charset=utf-8";
+  }
+  if (!strcmp(req->uri, "/schema.js")) {
+    data = schema_js_start;
+    type = "text/javascript; charset=utf-8";
+  }
+  if (!strcmp(req->uri, "/history.js")) {
+    data = history_js_start;
     type = "text/javascript; charset=utf-8";
   }
   if (!strcmp(req->uri, "/style.css")) {
@@ -457,7 +588,7 @@ static esp_err_t asset_handler(httpd_req_t *req) {
   httpd_resp_set_hdr(req, "Cache-Control", "no-store");
   httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
   httpd_resp_set_hdr(req, "Content-Security-Policy",
-                     "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; "
+                     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; object-src 'none'; "
                      "base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
   return httpd_resp_send(req, data, HTTPD_RESP_USE_STRLEN);
 }
@@ -501,25 +632,47 @@ void web_wifi_start() {
   httpd_config_t http = HTTPD_DEFAULT_CONFIG();
   http.stack_size = 8192;
   http.core_id = 0;
-  http.max_uri_handlers = 24;
-  http.max_open_sockets = 6;
+  http.max_uri_handlers = 40;
+  http_connections::configure(http);
   http.recv_wait_timeout = 5;
   http.send_wait_timeout = 5;
-  http.lru_purge_enable = false;
+  // Freie Sitzungen bei Platzmangel freigeben. ESP-IDF schützt laufende asynchrone
+  // Aufnahmen und OTA-Aufträge bis zu httpd_req_async_handler_complete().
+  http.lru_purge_enable = true;
+  // TCP-Keepalive prüft einen verschwundenen PC. Es misst keine Bedienung im Browser.
+  http.keep_alive_enable = true;
+  http.keep_alive_idle = 30;
+  http.keep_alive_interval = 5;
+  http.keep_alive_count = 3;
+  const esp_timer_create_args_t restart_args = {
+      restart_now, nullptr, ESP_TIMER_TASK, "web_restart", false};
+  ESP_ERROR_CHECK(esp_timer_create(&restart_args, &restart_timer));
   ESP_ERROR_CHECK(httpd_start(&server, &http));
+  http_connections::start(server);
   route("/", HTTP_GET, asset_handler);
   route("/analysis", HTTP_GET, asset_handler);
   route("/options", HTTP_GET, asset_handler);
+  route("/schema", HTTP_GET, asset_handler);
+  route("/history", HTTP_GET, asset_handler);
+  route("/history.js", HTTP_GET, asset_handler);
+  route("/schema.js", HTTP_GET, asset_handler);
   route("/app.js", HTTP_GET, asset_handler);
   route("/style.css", HTTP_GET, asset_handler);
+  route("/logo.png", HTTP_GET, branding_handler);
+  route("/favicon.png", HTTP_GET, branding_handler);
+  route("/favicon.ico", HTTP_GET, branding_handler);
   route("/api/status", HTTP_GET, status_handler);
   route("/api/wifi", HTTP_POST, wifi_handler);
   route("/api/scan", HTTP_POST, wifi_handler);
   route("/api/forget", HTTP_POST, wifi_handler);
   route("/api/stop", HTTP_POST, stop_handler);
+  route("/api/restart", HTTP_POST, restart_handler);
   route("/capture", HTTP_POST, download_handler);
   ota_register(server, token);
   live_register(server, token);
+  mqtt_bridge_start(server, token);
+  schema_register(server, token);
+  history_register(server, token);
   configASSERT(xTaskCreatePinnedToCore(wifi_manager, "wifi_manager", 12288, nullptr, 4, nullptr,
                                        0) == pdPASS);
   configASSERT(xTaskCreatePinnedToCore(download_worker, "web_download", 8192, nullptr, 5, nullptr,
