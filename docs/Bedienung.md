@@ -8,9 +8,6 @@
 | Analyse & Aufnahme | `/analysis` | Kommunikation prüfen und Rohdaten aufnehmen |
 | Optionen | `/options` | WLAN, Intervalle, Freigaben und Firmware-Update |
 
-„Sniffer“ bezeichnet hier die passive Rohdatenaufnahme.
-Neue Projekt- und Firmwaredateien verwenden diesen Begriff nicht mehr im Namen.
-
 ## Intervalle
 
 | Einstellung | Standard | Erlaubter Bereich |
@@ -74,10 +71,10 @@ Eine bestehende Datei wird nicht überschrieben.
 ## Rohaufnahme über TCP
 
 ```sh
-python firmware/capture.py capture 192.168.178.90 aufnahme --seconds 60 --hex
+python firmware/capture.py capture BRIDGE-IP aufnahme --seconds 60 --hex
 ```
 
-Die IP-Adresse durch die Adresse der Bridge ersetzen.
+`BRIDGE-IP` durch die IP-Adresse oder den Hostnamen der Bridge ersetzen.
 Der Standardport ist `4196`.
 Dieser Dienst erwartet einen PBXS-Aufnahmeauftrag.
 Er ist kein transparenter RS485-TCP-Adapter.

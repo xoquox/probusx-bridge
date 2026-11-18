@@ -1,4 +1,4 @@
-# ProBusX-Protokoll dieser Anlage
+# Geprüfter ProBusX-Protokollstand
 
 Diese Beschreibung beruht auf den beiden genannten Aufnahmen.
 Sie ist keine Herstellerspezifikation.
@@ -38,12 +38,11 @@ Der Parser akzeptiert zusätzlich Kennung `35`.
 Diese Kennung kommt in den beiden Aufnahmen nicht vor.
 Sie ist keine bestätigte weitere Geräteadresse.
 
-Die FlexBoxen sind laut Betreiber baugleich.
 Ein DIP-Schalter legt die Modulnummer fest.
 Für F1 ist die Buskennung `40` belegt.
 Die Umrechnung von Modulnummer zu Buskennung ist noch offen.
 F2 und F3 dürfen nicht aus aufeinanderfolgenden Kopfwerten abgeleitet werden.
-Das gleiche Nutzdatenformat wird erwartet und muss bestätigt werden.
+Das Nutzdatenformat weiterer Module ist noch nicht bestätigt.
 
 ## CRC16
 
@@ -151,7 +150,7 @@ Die normale Folge lautet `Taste → FF → 00 → FF`.
 Jeder Code benötigt eine neue Reglerabfrage.
 `00` folgt frühestens 500 ms nach dem Tastencode.
 Für den Dreitastendruck gilt `70 → 00 → FF` ohne diese Haltezeit.
-Die Sondertastenzuordnung beruht auf Aufnahme, Menüwechsel und Betreiberangabe.
+Die Sondertastenzuordnung wurde mit Aufnahme und Menüwechsel abgeglichen.
 
 ## Nachweise
 

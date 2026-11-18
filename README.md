@@ -15,6 +15,17 @@ Eine eigene Weboberfläche ersetzt die weiteren Conexio-Funktionen: Displayspieg
 | Entities | Temperaturen, Ausgangsstellwerte, Ein/Aus-Zustände und Diagnosewerte |
 | Display und Bedienung | Displaykamera, vier Richtungstasten und Dreitastendruck |
 
+Die Komponente unter `home_assistant/custom_components/probusx` wird nur für den Betrieb ohne MQTT benötigt.
+Sie verbindet Home Assistant direkt über HTTP mit der Bridge.
+MQTT bietet automatische Erkennung ohne eigene HA-Komponente, benötigt aber einen Broker.
+HTTP benötigt keinen Broker, fragt dafür regelmäßig die Bridge ab und erfordert die manuelle Komponentenpflege.
+Den Funktionsvergleich und die Einrichtung beschreibt [Home Assistant](docs/Home-Assistant.md).
+
+![Bedienfeld für Display und Tasten in Home Assistant](docs/bilder/bedienfeld.png)
+
+Die Abbildungen zeigen ältere Vorschauen mit simulierten Messwerten und einem aufgezeichneten Displaybild.
+Aufbau und Beschriftungen der aktuellen Weboberfläche weichen davon ab.
+
 ## Weboberfläche
 
 | Funktion | Umfang |
@@ -32,12 +43,28 @@ Eine eigene Weboberfläche ersetzt die weiteren Conexio-Funktionen: Displayspieg
 | Wartung | OTA-Update und Neustart |
 
 Der RAM-Verlauf beginnt nach jedem Neustart neu.
+Alle Webfunktionen arbeiten auch ohne MQTT-Broker und Home Assistant.
+
+![Vorschau der Reglerseite mit Display und Tasten](docs/bilder/regler.png)
+
+<details>
+<summary>Analyse und Optionen ansehen</summary>
+
+Kommunikationsdiagnose und Rohaufnahme:
+
+![Vorschau der Analyseseite mit Fehlerzählern und Rohaufnahme](docs/bilder/analyse.png)
+
+Anzeigeintervalle, WLAN und Firmware-Update:
+
+![Vorschau der Optionen für Anzeige, WLAN und Firmware-Update](docs/bilder/optionen.png)
+
+</details>
 
 ## Unterstützte Regler
 
 | Gerät | Stand |
 | --- | --- |
-| Prozeda REGULA, Hauptregler der getesteten Anlage | Temperaturen, Ausgänge, Display und Tasten |
+| Prozeda REGULA | Hauptregler: Temperaturen, Ausgänge, Display und Tasten geprüft |
 | FlexBox 1 | Vier Temperatureingänge; F1R1 und F1R3 mit aktiven Ausgangswerten geprüft |
 | FlexBox 2 und 3 | Noch nicht unterstützt |
 | Weitere Regler und OEM-Ausführungen | Anpassung und Prüfung erforderlich |
@@ -62,7 +89,7 @@ Bausteinbeispiele bei 3,3-V-Versorgung: [MAX3485](https://www.analog.com/en/prod
 | Thema | Anleitung |
 | --- | --- |
 | Installation und WLAN | [Installation](docs/Installation.md) · [WLAN](docs/WLAN.md) |
-| Home Assistant | [MQTT](docs/MQTT.md) · [Dashboard](docs/Home-Assistant.md) |
+| Home Assistant | [MQTT](docs/MQTT.md) · [MQTT/HTTP-Vergleich und Dashboard](docs/Home-Assistant.md) |
 | Bedienung | [Weboberfläche](docs/Bedienung.md) · [Schema](docs/Heizungsschema.md) · [Verlauf](docs/Verlauf.md) |
 | Entwicklung | [Projektaufbau](docs/Architektur.md) · [Build](docs/Entwicklung.md) · [AGENTS.md](AGENTS.md) |
 | Busanalyse | [Protokoll](docs/Protokoll.md) · [Prüfungen](docs/Pruefungen.md) · [Offene Punkte](docs/Offene-Punkte.md) |

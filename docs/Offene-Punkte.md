@@ -2,7 +2,7 @@
 
 ## FlexBox 2 und FlexBox 3
 
-Die Module sind laut Betreiber baugleich mit FlexBox 1.
+Die Telegrammzuordnung für FlexBox 2 und 3 ist noch nicht bestätigt.
 Der DIP-Schalter setzt die Modulnummer.
 Die Buskennung darf daraus noch nicht als `41`, `42`, `02` oder `03` abgeleitet werden.
 

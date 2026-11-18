@@ -161,9 +161,3 @@ Bei Firmwareänderungen Projekt- und Firmwareversion aktualisieren.
 Nach einem Versionswechsel den alten Build bereinigen. Anschließend USB- und OTA-Abbild aus demselben Build erstellen und prüfen.
 OTA-Projektkennung `pbx_waveshare_ota_v1` und vorhandene Partitionen nicht nebenbei ändern.
 Generierte Dateien wie `.pio/`, `web_assets.h` und Zugangsdaten nicht einchecken.
-
-## Vorgemerkte Änderung
-
-Die Optionsseite soll bei kurzen Status-Timeouts bearbeitbar bleiben. Eingaben erhalten und veralteten Verbindungsstatus anzeigen.
-Bearbeiten und Speichern getrennt behandeln. Laufende Vorgänge weiterhin mit verständlicher Begründung absichern.
-Diese Änderung ist im Ausgangsstand 0.6.1 noch nicht umgesetzt.

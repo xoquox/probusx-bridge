@@ -52,7 +52,7 @@
 
 ## 0.4.1 – Firmware 3.4.1
 
-- Freigegebenes türkises PX-Logo ohne orangefarbene Balken im Seitenkopf.
+- Türkises PX-Logo im Seitenkopf.
 - Favicon als PNG und ICO mit mehreren Größen.
 - 45-Grad-Abschrägungen an Flächen, Schaltflächen, Feldern und Wertanzeigen.
 - Sichtbarer innerer Fokusrahmen für die Tastaturbedienung.
@@ -91,8 +91,6 @@
 - Neue native Tests für NVS-Übernahme und BSSID-Verhalten ergänzt.
 - Browserprüfung umfasst 44 Treffer, gleiche SSIDs, Zielausfall und Moduswechsel.
 - Projektversion steht jetzt in `VERSION`. Die HA-Integration bleibt bei 0.3.1.
-
-Die FRITZ!Mesh-Einstellungen werden nicht geändert.
 
 ## Projekt 0.3.1 / Firmware 3.2.1
 

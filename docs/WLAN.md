@@ -16,7 +16,7 @@ Jeder Suchtreffer enthält:
 
 Die BSSID bezeichnet die MAC-Adresse des jeweiligen WLAN-Zugangspunkts.
 Sie ist nicht zwingend die aufgedruckte Geräte- oder LAN-MAC-Adresse.
-Bei einem Repeater zählt hier dessen 2,4-GHz-WLAN-BSSID.
+Bei mehreren Zugangspunkten zählt jeweils die BSSID des 2,4-GHz-WLANs.
 
 Die Bridge unterstützt kein 5-GHz-WLAN.
 Die Suche zeigt daher keine Zugangspunkte an, die ausschließlich auf 5 GHz senden.
@@ -70,7 +70,7 @@ Die gespeicherte Ziel-BSSID bleibt getrennt davon sichtbar.
 ## Ziel nicht erreichbar
 
 Bei fester Bindung bleibt die Bridge auf den ausgewählten Zugangspunkt beschränkt.
-Sie wechselt nicht automatisch zu einem anderen Repeater oder zur FRITZ!Box.
+Sie wechselt nicht automatisch zu einem anderen Zugangspunkt mit demselben WLAN-Namen.
 Sie versucht weiterhin, den gespeicherten Zugangspunkt zu erreichen.
 
 Nach einem Verbindungsverlust wird der vorhandene Ersatzzugangspunkt wieder aktiviert.
@@ -102,12 +102,6 @@ Dann muss das WLAN über den Ersatzhotspot neu eingerichtet werden.
 
 Beschädigte Bindungsdaten werden nicht durch automatische Wahl ersetzt.
 Die Bridge verwendet dann den Ersatzzugangspunkt zur erneuten Einrichtung.
-
-## FRITZ!Mesh
-
-Die Auswahl betrifft nur den WLAN-Client der ProBusX-Bridge.
-FRITZ!Box, Repeater, gemeinsame SSID und andere WLAN-Geräte bleiben unverändert.
-Für die feste Bindung wird keine FRITZ!Mesh-Funktion abgeschaltet.
 
 ## Technische Referenz
 

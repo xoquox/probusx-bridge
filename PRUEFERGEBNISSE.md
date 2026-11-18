@@ -7,8 +7,7 @@ Prüfdatum: 14.11.2026. Ausgangsstand: Projekt 0.6.0 / Firmware 3.6.0.
 Der Datenhandler der 3.6.0 berechnete und sendete die gesamte Verlaufsantwort im zentralen
 HTTP-Task. Bei 1024 Zeitkörben waren das 262.176 Byte, auch bei überwiegend leeren Körben.
 Für die gesamte Antwort fehlte eine gemeinsame Frist. Ein langsamer Abruf konnte dadurch
-andere Webseiten und den Neustart-Endpunkt verzögern. Der Betreiber meldete den wiederholbaren
-Auslöser „Verlauf öffnen“. Ob sämtliche beobachteten MQTT-Verbindungsabbrüche dieselbe Ursache
+andere Webseiten und den Neustart-Endpunkt verzögern. Ob MQTT-Verbindungsabbrüche dieselbe Ursache
 haben, ist durch die Offlineprüfung nicht nachgewiesen.
 
 Die 3.6.1 legt die Arbeit in einen eigenen Task mit Priorität unter MQTT. Der HTTP-Handler
@@ -39,7 +38,6 @@ Der neue Abruf-Task besitzt 8192 Byte Stack. Ein Antwortpuffer belegt höchstens
 USB und OTA bestehen SHA-256, Versions-, Projekt-, Partitions- und Gleichheitsprüfung.
 Die finale Basisprüfung umfasst 30 Firmwaretests ohne übersprungene SDK-Prüfung,
 drei Codec-Tests und fünf Projektprüfungen. Die native MQTT-Prüfung ist bestanden.
-Der Quellpatch wird vor Auslieferung angewendet und byteweise mit dem Quellordner verglichen.
 
 ## Grenze
 

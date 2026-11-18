@@ -6,7 +6,7 @@ Die Seite **Regler** zeigt unter dem türkisfarbenen Bedienfeld zwei Wertkästen
 Hauptregler und FlexBox 1. Jeder Kasten enthält eine Tabelle für Eingänge und eine Tabelle
 für Ausgänge. Aktive Ausgänge sind grün markiert. Ungültige oder veraltete Werte erscheinen als Strich.
 
-Unter **Optionen → Verlauf und FlexBoxen** kann der Betreiber:
+Unter **Optionen → Verlauf und FlexBoxen** lassen sich diese Einstellungen ändern:
 
 - die Verlaufsaufzeichnung einschalten oder pausieren;
 - das Speicherintervall für Temperaturen zwischen 1 und 3600 Sekunden einstellen;

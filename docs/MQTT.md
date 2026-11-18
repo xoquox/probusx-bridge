@@ -4,6 +4,8 @@ Ab Projekt 0.5.0 kann die Bridge Werte, Bilder und Tastendrücke über MQTT übe
 Die Bridge hält dafür eine TCP-Verbindung zum Broker.
 Home Assistant verbindet sich mit demselben Broker.
 Die MQTT-Anbindung braucht keine HTTP-Abfragen an die Bridge und keine eigene HA-Komponente.
+Die Komponente unter `home_assistant/custom_components/probusx` wird nur für den Betrieb ohne MQTT benötigt.
+Funktionen sowie Vor- und Nachteile stehen im [Vergleich von MQTT und HTTP](Home-Assistant.md#mqtt-und-http-im-vergleich).
 
 ## Einrichten
 

@@ -8,7 +8,7 @@
 | `firmware/tools/` | Webdateien einbetten und Firmwareabbilder erstellen |
 | `firmware/capture.py` | PBXS-Dateien aufnehmen und auswerten |
 | `firmware/tests/` | Aufnahme-, WLAN-, Web- und OTA-Tests |
-| `home_assistant/custom_components/probusx/` | HA-Integration |
+| `home_assistant/custom_components/probusx/` | Optionale HTTP-Integration für HA ohne MQTT |
 | `home_assistant/www/probusx/` | Dashboard-Karte |
 | `tests/` | Protokoll-, Bild-, HA- und Browserprüfungen |
 | `tools/` | Gemeinsame Prüf- und Paketprogramme |

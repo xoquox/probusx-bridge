@@ -1,11 +1,36 @@
 # Home Assistant einrichten
 
-**Ab Firmware 3.5.0 die [MQTT-Anbindung](MQTT.md) verwenden.**
-Sie meldet alle 61 Entities ohne eigene HA-Komponente an.
-Die folgende Installation beschreibt den bisherigen HTTP-Betrieb.
-Für den Wechsel gelten die Schritte in der MQTT-Anleitung.
+**MQTT ist ab Firmware 3.5.0 die Hauptschnittstelle zu Home Assistant.**
+Die [MQTT-Anbindung](MQTT.md) meldet alle 61 Entities ohne eigene ProBusX-Komponente an.
+`home_assistant/custom_components/probusx` enthält weiterhin die bisherige HTTP-Integration.
+**Diese Komponente wird nur benötigt, wenn Home Assistant ohne MQTT auf die Bridge zugreift.**
+Sie ist eine benutzerdefinierte Integration, keine Home-Assistant-App und kein Add-on.
 
-## Bisherige HTTP-Integration installieren
+## MQTT und HTTP im Vergleich
+
+| Bereich | MQTT | HTTP-Komponente |
+| --- | --- | --- |
+| Verbindung | Die Bridge veröffentlicht Daten an einen Broker; HA liest sie dort. | HA fragt Status und Display direkt bei der Bridge ab. |
+| Einrichtung | Broker und HA-MQTT-Integration einrichten; ProBusX-Entities erscheinen durch Discovery. | Komponentenordner kopieren, HA neu starten und die Bridge-Adresse eintragen. |
+| Messwerte und Bedienung | 14 Temperaturen, 15 Stellwerte, 15 Ein/Aus-Zustände, Display und fünf Tasten. | Dieselben Messwertgruppen, Display und fünf Tasten. |
+| Diagnose | Unter anderem WLAN-Signal, Laufzeit, Heap, MQTT-Verbindungen und abgelehnte MQTT-Tasten. | Unter anderem CRC-Fehlerquote, Bus-Empfangsrate, Telegrammpausen und HTTP-Abruffehler. |
+| Displayübertragung | Die Bridge erzeugt PNG-Bilder und sendet sie an den Broker. | HA lädt Rohpixel über HTTP und wandelt sie in PNG um. |
+| Vorteil | Automatische Erkennung; keine eigene HA-Komponente pflegen; keine HA-Status- oder Bildabrufe am ESP. | Kein Broker erforderlich; direkte Verbindung zwischen HA und Bridge. |
+| Nachteil | Zusätzlicher Broker mit Zugangsdaten und Verfügbarkeit erforderlich. | Regelmäßige HTTP-Abfragen am ESP; manuelle Installation und Pflege der eigenen Komponente. |
+
+Beide Wege nutzen dieselben Busdaten und Anzeigeintervalle der Bridge.
+Die HTTP-Komponente kennzeichnet alle F1-Ausgänge weiterhin als vorläufig.
+MQTT kennzeichnet F1R1 und F1R3 bereits als mit aktiven Werten geprüft.
+Die [Bedienfeld-Karte](#bedienfeld-installieren) kann mit beiden Wegen verwendet werden.
+Schema, RAM-Verlauf, Rohaufnahme, WLAN und OTA bleiben Funktionen der Bridge-Weboberfläche.
+Sie funktionieren auch ohne MQTT-Broker und ohne Home Assistant.
+HA-Verläufe benötigen bei beiden Wegen den HA-Recorder.
+
+Die HTTP-Integration und MQTT haben unterschiedliche eindeutige Entity-Kennungen.
+Für den Wechsel gelten die [Migrationsschritte](MQTT.md#von-der-bisherigen-http-integration-wechseln).
+Beide Wege nicht parallel für dieselbe Bridge betreiben. Sonst entstehen doppelte Entities und zusätzliche HTTP-Abfragen.
+
+## HTTP-Integration ohne MQTT installieren
 
 1. Den Ordner `home_assistant/custom_components/probusx` nach `/config/custom_components/probusx` kopieren.
 2. Prüfen, dass `/config/custom_components/probusx/manifest.json` vorhanden ist.

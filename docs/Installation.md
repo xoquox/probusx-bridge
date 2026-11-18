@@ -1,15 +1,16 @@
 # Installation
 
-Ab Firmware 3.5.0 die [MQTT-Anbindung für Home Assistant](MQTT.md) einrichten.
-Die Weboberfläche bleibt für WLAN, Schema, direkte Bedienung und OTA erhalten.
+Für Home Assistant ab Firmware 3.5.0 die [MQTT-Anbindung](MQTT.md) verwenden.
+Ohne MQTT ist die [HTTP-Integration](Home-Assistant.md#http-integration-ohne-mqtt-installieren) verfügbar.
+Die Weboberfläche arbeitet auch ohne Home Assistant und ohne MQTT-Broker.
 
 ## Voraussetzungen
 
 - Waveshare ESP32-S3-RS485-CAN / -U mit 16 MiB Flash und 8 MiB Octal-PSRAM.
 - USB-Datenkabel.
-- Windows 10 oder Linux, zum Beispiel Fedora.
+- Windows oder Linux für die USB-Installation.
 - Ein 2,4-GHz-WLAN.
-- Home Assistant mit Zugriff auf das lokale Netzwerk.
+- Optional: Home Assistant mit Zugriff auf das lokale Netzwerk.
 
 Die Pinbelegung steht in der [Projektbeschreibung](../README.md).
 Die Firmware nutzt ausschließlich den RS485-Anschluss dieser Platine.
@@ -29,7 +30,7 @@ Nach einem lokalen Build liegen die Dateien unter `firmware/abbilder/`.
 Der GitHub-Workflow stellt dieselben Dateien als herunterladbares Build-Ergebnis bereit.
 Die Bauanleitung steht in [Entwicklung](Entwicklung.md).
 
-## Erstinstallation unter Windows 10
+## Erstinstallation unter Windows
 
 1. Python installieren. Dabei die Option für den Suchpfad aktivieren.
 2. Die ZIP-Datei entpacken.
@@ -60,7 +61,7 @@ Falls das Flashprogramm keine Verbindung aufbaut:
 Das USB-Abbild setzt die gespeicherten WLAN-Daten und Optionen zurück.
 Für spätere Updates das OTA-Abbild verwenden.
 
-## Erstinstallation unter Fedora oder anderem Linux
+## Erstinstallation unter Linux
 
 1. Python und pip installieren, falls sie fehlen.
 2. Eine virtuelle Umgebung anlegen:
